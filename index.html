@@ -175,7 +175,7 @@ table.tm tr.tt td{background:var(--bg);font-weight:700}
 .esheet{background:var(--card);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px))}
 .esheet .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .esheet details.span2{grid-column:1/-1}
-</style></head><body><header class="top"><div class="brand">التقرير الشامل <small id="monthLbl"></small></div><nav id="tabs"><button data-t="home">الرئيسية</button><button data-t="today">اليوم</button><button data-t="track">التتبع</button><button data-t="workers">العمال والساعات</button><button data-t="groups">المجموعات</button><button data-t="models">الطلبيات</button><button data-t="cmp">المقارنة</button><button data-t="costs">المصاريف والإعدادات</button><button data-t="forms">الفيشات</button><button data-t="report" class="main">التقرير</button></nav></header>
+</style></head><body><header class="top"><div class="brand" id="brandHome" style="cursor:pointer">التقرير الشامل <small id="monthLbl"></small></div><nav id="tabs"><button data-t="menu">☰ القائمة</button><button data-t="today">اليوم</button><button data-t="models">الطلبيات</button><button data-t="home">اللوحة</button><button data-t="report">التقارير</button><button data-t="costs">الإعدادات</button></nav></header>
 <main id="view"></main><script>/*!
  * html2canvas 1.4.1 <https://html2canvas.hertzen.com>
  * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
@@ -665,11 +665,13 @@ function compute(st){
   });
   const rh=ranks(WK.map(x=>x.h)), rn=ranks(WK.map(x=>x.net));
   WK.forEach((x,i)=>{x.rh=rh[i]; x.rn=rn[i];});
-  const WAGES = WK.reduce((s,x)=>s+x.brut,0), HOURS = WK.reduce((s,x)=>s+x.h,0);
+  const wdAll=rng(mS,mE).reduce((s,t)=>s+dw(t),0), MWT=(st.monthly||[]).reduce((s,x)=>s+(num(x.amount)||0),0), MWD=wdAll>0?MWT/wdAll:0, MWacc=winDays.reduce((s,t)=>s+dw(t)*MWD,0);
+  const WAGES = WK.reduce((s,x)=>s+x.brut,0)+MWacc, HOURS = WK.reduce((s,x)=>s+x.h,0);
 
   // ---- wages allocation: each day's wages (hours x rate) split equally among the hourly groups working that day, then by quantity among the group's open models
   const open = (r,t,useAn) => (useAn?r.an:r.a)<=t && (r.b===null || r.b>=t);
   const dayW={}; st.workers.forEach(w=>{ const rt=num(w.rate)||0; days.forEach(d=>{ const v=String((w.hours||{})[d]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v); if(n!==null) dayW[d]=(dayW[d]||0)+n*rt; }); });
+  if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
   winDays.forEach(t=>{ const W=dayW[dnum(t)]||0; if(!W) return;
     const el=G.filter(g=>st.groups[g].hourly && hc(g,t)>0 && M.some(r=>r.g===g && open(r,t,true)));
@@ -780,7 +782,7 @@ function compute(st){
 
   // last day with headcount
   let lastHead=null; G.forEach(g=>Object.keys(st.heads[g]||{}).forEach(d=>{ if(String(st.heads[g][d]).trim()!=="" && (lastHead===null||+d>lastHead)) lastHead=+d; }));
-  return {EX,ohG,ohA,NGc,UNAL,OHUN,mS,nD,TODAY,G,M,WK,WAGES,HOURS,GV,okg,rv,rp,rq,rm,TQ,TM,TW,MoOn,FC,TC,WDm,AVg,AV,oh,hc,hasHC,firstD,lastD,lastHead,workDays,incomplete,RATE_W,dnum};
+  return {MWL:(st.monthly||[]).filter(x=>String(x.name||"").trim()||num(x.amount)).map(x=>({n:String(x.name||"").trim()||"—",amt:num(x.amount)||0,acc:MWT>0?(num(x.amount)||0)*MWacc/MWT:0})),MW:MWacc,MWT,MWD,EX,ohG,ohA,NGc,UNAL,OHUN,mS,nD,TODAY,G,M,WK,WAGES,HOURS,GV,okg,rv,rp,rq,rm,TQ,TM,TW,MoOn,FC,TC,WDm,AVg,AV,oh,hc,hasHC,firstD,lastD,lastHead,workDays,incomplete,RATE_W,dnum};
 }
 const api={compute,pd,dw,rng,ranks,num,isAbs,DAY};
 if(typeof module!=="undefined") module.exports=api; else root.Calc=api;
@@ -816,8 +818,8 @@ const nD=()=>new Date(Date.UTC(st.year,st.month,0)).getUTCDate();
 const mLabel=()=>`${MONTHS[st.month-1]} ${st.year}`;
 const isSun=d=>new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()===0;
 const wdl=d=>"DLMMJVS"[new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()];
-let tab=(location.hash||"#home").slice(1);
-if(!["home","today","track","workers","groups","models","costs","forms","report","cmp"].includes(tab)) tab="report";
+let tab=(location.hash||"#menu").slice(1);
+if(!["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick"].includes(tab)) tab="menu";
 
 
 /* ---------- المقارنة بين الأشهر ---------- */
@@ -826,8 +828,8 @@ function cmpData(){
   const one=(key,R)=>{ const S=R.M.filter(r=>r.sp!==null&&r.fin), tp=S.reduce((s,r)=>s+r.pf*r.q,0), ts=S.reduce((s,r)=>s+r.sp*r.q,0);
     return {key,y:+key.split("-")[0],m:+key.split("-")[1],tp,ts,pc:ts?100*tp/ts:null,vd:R.TW>0?ts/R.TW:null,W:R.WAGES,TC:R.TC,n:S.length,q:S.reduce((s,r)=>s+r.q,0),H:R.HOURS}; };
   Object.keys(arch).forEach(k=>{ if(k===cur) return; try{ const a=arch[k], p=k.split("-").map(Number), s2=JSON.parse(JSON.stringify(st));
-    s2.year=p[0]; s2.month=p[1]; s2.workers.forEach(w=>{ const o=(a.hours||[]).find(x=>x.n===w.name); w.hours=o?o.h:{}; w.advance=o?o.a:""; });
-    s2.heads=a.heads||{}; if(a.charges) s2.charges=a.charges; s2.models=a.models||[];
+    s2.year=p[0]; s2.month=p[1]; if(a.w){ s2.workers=JSON.parse(JSON.stringify(a.w)); if(a.groups) s2.groups=JSON.parse(JSON.stringify(a.groups)); } else s2.workers.forEach(w=>{ const o=(a.hours||[]).find(x=>x.n===w.name); w.hours=o?o.h:{}; w.advance=o?o.a:""; });
+    s2.heads=a.heads||{}; if(a.charges) s2.charges=a.charges; s2.monthly=a.monthly||[]; s2.models=a.models||[];
     s2.today=p[0]+"-"+String(p[1]).padStart(2,"0")+"-"+String(new Date(Date.UTC(p[0],p[1],0)).getUTCDate()).padStart(2,"0");
     out.push(one(k,compute(s2))); }catch(e){ console.error(e); } });
   try{ out.push(one(cur,compute(st))); }catch(e){}
@@ -862,7 +864,7 @@ function vCompare(){
   const body=rows.map(([l,f,d,s,g])=>`<tr><td style="text-align:start">${l}</td>${D.map((x,i)=>{ const v=f(x); return `<td class="c">${cell(v,d,s)} ${i?tr(v,f(D[i-1]),g):""}</td>`; }).join("")}</tr>`).join("");
   const ch=(t,f,d,s)=>{ const it=D.filter(x=>f(x)!=null).map(x=>({l:MN[x.m]+" "+x.y,v:f(x),t:fa(f(x),d)+(s||""),c:f(x)>=0?"ok":"bd"})); return it.length?`<details class="card" open><summary><b>${t}</b></summary>${bars(it,{})}</details>`:""; };
   const R0=compute(st);
-  view.innerHTML=`${pdfReady()?'<div class="bar"><button class="btn" id="mepdf">تقرير نهاية الشهر PDF</button>'+(window.claude?"":'<button class="btn alt" id="meshare">مشاركة</button>')+'</div>':""}<div id="mepg" style="display:none">${brand(R0,monthPage(R0,D))}</div><div class="note">تُحفظ بيانات كل شهر عند الانتقال إلى شهر جديد، فتظهر هنا للمقارنة.${D.length<2?" <b>لا يوجد حاليًا إلا شهر واحد؛ ستظهر المقارنة بعد أول انتقال شهر.</b>":""}</div>
+  view.innerHTML=`<div class="note">تُحفظ بيانات كل شهر عند الانتقال إلى شهر جديد، فتظهر هنا للمقارنة.${D.length<2?" <b>لا يوجد حاليًا إلا شهر واحد؛ ستظهر المقارنة بعد أول انتقال شهر.</b>":""}</div>
   <div class="card" style="overflow-x:auto"><table class="cmp">${head}${body}</table></div>
   ${ch("نسبة الربح",x=>x.pc,1,"%")}${ch("قيمة اليوم/عامل",x=>x.vd,1,"")}${ch("صافي الربح (د)",x=>x.tp,0,"")}
   <style>.cmp{width:100%;border-collapse:collapse;font-size:13px}.cmp th,.cmp td{padding:6px 7px;border-bottom:1px solid var(--line);white-space:nowrap}.cmp .tu{color:#1a8f4c}.cmp .td2{color:#c0392b}</style>`;
@@ -893,8 +895,35 @@ function dayPage(R,ts,al){
   ${W&&W.extra?`<div style="margin-top:6px">المتوقع بعد أجور الساعات المتبقية ≈ <b>${fa(res-W.extra)} د</b></div>`:""}
   </div>`;
 }
-function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===t)); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
+
+function vMenu(){
+  const R=compute(st), d=new Date(R.TODAY).getUTCDate(), work=dw(R.TODAY)>0;
+  const thr=stgDays(), all=allM(R).map(r=>({r,si:stageInfo(r,R)})), stuck=all.filter(x=>x.si.days!==null&&x.si.days>thr&&x.si.k<DLV).length, pend=all.filter(x=>x.si.k<DLV).length;
+  const nr=work?st.workers.filter(w=>String(w.name||"").trim()&&String((w.hours||{})[d]??"").trim()==="").length:0;
+  const S=R.M.filter(r=>r.sp!==null), ts=S.reduce((s,r)=>s+r.sp*r.q,0), res=ts-(R.TC+R.WAGES+R.TM+R.MoOn);
+  const cards=[["today","📅","اليوم",(nr?fa(nr)+" عمال بلا ساعات":"ساعات اليوم مكتملة")+" · "+dm(R.TODAY)],
+    ["models","📋","الطلبيات",fa(pend)+" قيد التنفيذ"+(stuck?" · "+fa(stuck)+" عالقة":"")],
+    ["home","📊","اللوحة","النتيجة: "+(res<0?"خسارة ":"ربح ")+fa(Math.abs(res))+" د"],
+    ["report","📄","التقارير","شامل · مقارنة · يومي · فيشات"],
+    ["costs","⚙️","الإعدادات","مصاريف · أجور شهرية · نسخ احتياطي"]];
+  view.innerHTML=`<div class="mgrid">${cards.map(c=>`<button class="mtile" data-go="${c[0]}"><span class="mi">${c[1]}</span><b>${c[2]}</b><small>${c[3]}</small></button>`).join("")}</div><div class="note" style="text-align:center;margin-top:10px">${bkLine()}</div>
+  <style>.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mtile{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit;cursor:pointer;text-align:center;min-height:124px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.mtile:active{transform:scale(.97)}.mtile:first-child{grid-column:1/-1}.mtile .mi{font-size:32px;line-height:1}.mtile b{font-size:16px;color:var(--navy)}.mtile small{font-size:12px;color:var(--mut)}@media(min-width:700px){.mgrid{grid-template-columns:repeat(3,1fr)}.mtile:first-child{grid-column:auto}}</style>`;
+  view.oninput=null; view.onchange=null; view.onclick=e=>{ const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
+}
+function vQuick(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), ts=S.reduce((s,r)=>s+r.sp*r.q,0), al=alerts(R), D=cmpData();
+  const btn=(id,sid,l)=>pdfReady()?`<div class="bar"><button class="btn" id="${id}">${l} PDF</button>${window.claude?"":`<button class="btn alt" id="${sid}">مشاركة</button>`}</div>`:'<div class="note">تصدير PDF غير جاهز.</div>';
+  view.innerHTML=`<div class="card"><b>تقرير اليوم</b><div class="note">الحضور والغياب، الطلبيات الجارية والعالقة، التنبيهات.</div>${btn("dypdf","dyshare","تقرير اليوم")}</div><div class="card"><b>تقرير نهاية الشهر</b><div class="note">الأرقام الرئيسية، المقارنة بالشهر السابق، أفضل وأضعف الموديلات.</div>${btn("mepdf","meshare","تقرير نهاية الشهر")}</div><div id="dypg" style="display:none">${brand(R,dayPage(R,ts,al))}</div><div id="mepg" style="display:none">${brand(R,monthPage(R,D))}</div>`;
+  view.oninput=null; view.onchange=null; view.onclick=e=>{ const i=e.target.id, iso=new Date(R.TODAY).toISOString().slice(0,10), fm="تقرير_نهاية_الشهر_"+st.year+"-"+st.month+".pdf", fd="تقرير_اليوم_"+iso+".pdf";
+    if(i==="dypdf") exportPdf(e.target,"#dypg .rp","p",fd); if(i==="dyshare") sharePdf(e.target,"#dypg .rp","p",fd); if(i==="mepdf") exportPdf(e.target,"#mepg .rp","p",fm); if(i==="meshare") sharePdf(e.target,"#mepg .rp","p",fm); };
+}
+const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],report:["report","cmp","quick","forms"],costs:["costs"]};
+const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",report:"التقرير الشامل",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
+const secOf=t=>Object.keys(SEC).find(k=>SEC[k].includes(t))||t;
+function subNav(k){ const L=SEC[secOf(k)]||[]; if(L.length<2) return ""; return `<div class="stg noprint" style="margin:0 0 10px">${L.map(x=>`<button class="sc ${x===k?"c":""}" data-sub="${x}">${SUBL[x]}</button>`).join("")}</div>`; }
+function decor(k){ if(tab!==k) return; view.insertAdjacentHTML("afterbegin",subNav(k)+(k==="today"?`<div id="todoWrap">${todoCard(compute(st))}</div>`:"")); }
+function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
+{ const bh=document.getElementById("brandHome"); if(bh) bh.onclick=()=>go("menu"); }
 
 /* ---------- workers ---------- */
 function vWorkers(){
@@ -986,6 +1015,7 @@ function vCosts(){
   let h=`<h2>المصاريف الثابتة للشهر</h2><div class="scroll"><table class="g"><tr><th>البند</th><th>المبلغ (د)</th><th></th></tr>`;
   st.charges.forEach((c,i)=>{ h+=`<tr data-i="${i}"><td><input class="w" style="width:170px" data-f="name" value="${esc(c.name)}"></td><td><input class="m" style="width:90px" inputmode="numeric" data-f="amount" value="${esc(c.amount)}"></td><td><button class="btn del" data-del="${i}">×</button></td></tr>`; });
   h+=`<tr class="tot"><td>المجموع</td><td id="tc"></td><td></td></tr></table></div><div class="bar"><button class="btn" id="addC">+ بند</button></div>
+  <h2>أجور شهرية (تُقسَّم على الأيام تلقائياً)</h2><div class="note">أدخل الأجر الشهري لكل شخص، فيُوزَّع على أيام العمل ويدخل في تكلفة المجموعات يومياً. احذف أجره من «المصاريف الثابتة» حتى لا يُحسب مرتين.</div><div class="scroll"><table class="g"><tr><th>الاسم</th><th>الأجر الشهري (د)</th><th></th></tr>${(st.monthly||[]).map((c,i)=>`<tr data-mi="${i}"><td><input class="w" style="width:150px" data-f="name" value="${esc(c.name)}"></td><td><input class="m" style="width:90px" inputmode="numeric" data-f="amount" value="${esc(c.amount)}"></td><td><button class="btn del" data-mdel="${i}">×</button></td></tr>`).join("")}<tr class="tot"><td>المجموع</td><td id="mwt">${fa((st.monthly||[]).reduce((s,x)=>s+(num(x.amount)||0),0))}</td><td></td></tr></table></div><div class="bar"><button class="btn" id="addMW">+ شخص بأجر شهري</button></div>
   <h2>إعدادات</h2><div class="card"><div class="row">
   <label>تاريخ الوضع<input type="date" id="s_today" value="${esc(st.today)}"></label>
   <label>الشهر<select id="s_month">${MONTHS.map((m,i)=>`<option value="${i+1}" ${st.month===i+1?"selected":""}>${m}</option>`).join("")}</select></label>
@@ -997,7 +1027,8 @@ function vCosts(){
   <h2>نسخة احتياطية</h2><div class="card"><div class="bar"><button class="btn" id="exp">حفظ نسخة</button><button class="btn" id="shr">حفظ في Drive / مشاركة</button><label class="btn alt">استرجاع<input type="file" id="imp" hidden></label><button class="btn del" id="reset">إعادة البيانات الأصلية</button></div><div class="note" id="bmsg">البيانات محفوظة في هذا الجهاز فقط. للنسخة في درايف: اضغط «حفظ في Drive / مشاركة» ثم اختر Google Drive. وللاسترجاع: «استرجاع» ثم اختر الملف من Drive. ${bkLine()}</div>${snapList()}</div>`;
   view.innerHTML=h; sumC();
   view.oninput=e=>{ const t=e.target;
-    if(t.closest("tr[data-i]")){ st.charges[+t.closest("tr").dataset.i][t.dataset.f]=t.value; sumC(); }
+    if(t.closest("tr[data-mi]")){ st.monthly[+t.closest("tr").dataset.mi][t.dataset.f]=t.value; const el=$("#mwt"); if(el) el.innerHTML=fa(st.monthly.reduce((s,x)=>s+(num(x.amount)||0),0)); }
+    else if(t.closest("tr[data-i]")){ st.charges[+t.closest("tr").dataset.i][t.dataset.f]=t.value; sumC(); }
     else if(t.id==="s_today") st.today=t.value;
     else if(t.id==="s_target") st.target=num(t.value)||200; else if(t.id==="s_wage"){ st.wageThr=num(t.value)||50; st.nearThr=Math.max(0,st.wageThr-10); } else if(t.id==="s_loss"){ const v=num(t.value); st.lossThr=(v===null||v<0)?5:v; } else if(t.id==="s_stg"){ const v=num(t.value); st.stageDays=(v===null||v<=0)?3:v; } else if(t.id==="s_long") st.longDays=num(t.value)||7; else if(t.id==="s_wday") st.wageDay=t.value.trim();
     save(); };
@@ -1005,17 +1036,19 @@ function vCosts(){
   function switchMonth(ny,nm){ st.arch=st.arch||{}; const ok=st.year+"-"+st.month, nk=ny+"-"+nm; if(ok===nk) return;
     const R0=compute(st); allM(R0).forEach(r=>{ const m=st.models[r.i]; if(m&&(m.stage===undefined||m.stage==="")){ const si=stageInfo(r,R0); m.stage=si.k; if(si.k>=2&&si.k<=5&&!m.stageDate&&r.b) m.stageDate=new Date(r.b).toISOString().slice(0,10); } });
     const delIdx=new Set(allM(R0).filter(r=>stageInfo(r,R0).k===DLV).map(r=>r.i));
-    st.arch[ok]={hours:st.workers.map(w=>({n:w.name,h:w.hours||{},a:w.advance})),heads:st.heads,charges:st.charges,models:JSON.parse(JSON.stringify(st.models.filter((m,i)=>delIdx.has(i))))};
+    st.arch[ok]={w:JSON.parse(JSON.stringify(st.workers)),groups:JSON.parse(JSON.stringify(st.groups)),hours:st.workers.map(w=>({n:w.name,h:w.hours||{},a:w.advance})),heads:st.heads,charges:st.charges,monthly:JSON.parse(JSON.stringify(st.monthly||[])),models:(()=>{ const ix=new Set(delIdx); R0.M.forEach(r=>{ if(r.fin) ix.add(r.i); }); return JSON.parse(JSON.stringify(st.models.filter((m,i)=>ix.has(i)))); })()};
     st.models=st.models.filter((m,i)=>!delIdx.has(i));
     Object.keys(st.groups).forEach(g=>{ const hh=st.heads[g]||{}; const ds=Object.keys(hh).filter(d=>String(hh[d]).trim()!==""&&!isAbs(String(hh[d]).trim())).map(Number).sort((a,b)=>a-b); if(ds.length) st.groups[g].prev=num(hh[ds[ds.length-1]])||0; });
     const a=st.arch[nk];
-    st.workers.forEach(w=>{ const o=a&&a.hours.find(x=>x.n===w.name); w.hours=o?o.h:{}; w.advance=o?o.a:""; });
-    st.heads=a?a.heads:{}; if(a&&a.charges) st.charges=a.charges;
+    if(a&&a.w){ st.workers=JSON.parse(JSON.stringify(a.w)); if(a.groups) st.groups=JSON.parse(JSON.stringify(a.groups)); } else st.workers.forEach(w=>{ const o=a&&a.hours.find(x=>x.n===w.name); w.hours=o?o.h:{}; w.advance=o?o.a:""; });
+    st.heads=a?a.heads:{}; if(a&&a.charges) st.charges=a.charges; st.monthly=a&&a.monthly?a.monthly:(st.monthly||[]).map(x=>({name:x.name,amount:""}));
     if(a&&a.models) a.models.forEach(m=>{ if(!st.models.some(x=>x.name===m.name&&String(x.g)===String(m.g)&&x.start===m.start)) st.models.push(m); });
     st.year=ny; st.month=nm; st.today=ny+"-"+String(nm).padStart(2,"0")+"-01"; save(); vCosts(); }
   view.onchange=e=>{ const t=e.target; if(t.id==="s_month"||t.id==="s_year"){ const ny=t.id==="s_year"?(num(t.value)||st.year):st.year, nm=t.id==="s_month"?+t.value:st.month;
     if(confirm("الانتقال إلى "+nm+"/"+ny+": تُحفظ بيانات الشهر الحالي ويبدأ الحساب من أول الشهر الجديد. متابعة؟")) switchMonth(ny,nm); else vCosts(); } };
   view.onclick=e=>{ const t=e.target;
+    if(t.id==="addMW"){ st.monthly=st.monthly||[]; st.monthly.push({name:"",amount:""}); save(); return vCosts(); }
+    if(t.dataset.mdel!==undefined){ st.monthly.splice(+t.dataset.mdel,1); save(); return vCosts(); }
     if(t.id==="addC"){ st.charges.push({name:"",amount:""}); save(); vCosts(); }
     if(t.dataset.del!==undefined && t.closest("tr")&&confirmDel("",t)){ st.charges.splice(+t.dataset.del,1); save(); vCosts(); }
     if(t.dataset.snap){ try{ const o=JSON.parse(localStorage.getItem(KEY+"-snap-"+t.dataset.snap)); if(o&&o.v&&confirm("سيُستبدل كل ما في التطبيق بهذه النسخة. متابعة؟")){ snap(st); o.rev=window.DEFAULT_STATE.rev; st=o; save(); vCosts(); } }catch(_){} return; }
@@ -1071,7 +1104,7 @@ const hx=v=>String(v??"").replace(".",",");
 function vForms(){
   const claude_=!!window.claude;
   view.innerHTML=`<div class="bar noprint pv"><button class="btn ${fSheet==="workers"?"":"alt"}" data-fs="workers">فيش العمال</button><button class="btn ${fSheet==="orders"?"":"alt"}" data-fs="orders">فيش الطلبيات</button><span class="note">|</span><button class="btn ${fMode==="blank"?"":"alt"}" data-fm="blank">فارغ</button><button class="btn ${fMode==="filled"?"":"alt"}" data-fm="filled">مملوء بالبيانات</button><span class="note">|</span><button class="btn alt" data-pv="fit">ملاءمة العرض</button><button class="btn alt" data-pv="1">100%</button>${pdfBtns("f")}</div>
-  <div class="note noprint">الفارغ: أسماء العمال وأجورهم مكتوبة مسبقاً، والباقي يُملأ باليد. المملوء: كل بياناتك الحالية.</div>
+  <div class="note noprint">الفارغ: فارغ تماماً (بلا أسماء ولا أجور ولا موديلات) ليُملأ باليد. المملوء: يُعبَّأ آلياً من بياناتك الحالية.</div>
   <div id="forms"><style id="pgsz">@page{size:A4 ${fSheet==="workers"?"landscape":"portrait"};margin:0}</style>${fSheet==="workers"?sheetWorkers(fMode==="filled"):sheetOrders(fMode==="filled")}</div>`;
   view.oninput=null;
   view.onclick=e=>{ const d=e.target.dataset;
@@ -1084,7 +1117,7 @@ function fitForm(){ const r=document.getElementById("forms"); if(!r) return; con
 addEventListener("resize",()=>{ if(tab==="forms") fitForm(); });
 function sheetWorkers(filled){
   const N=nD(), weeks=[]; for(let a=1;a<=N;a+=7) weeks.push([a,Math.min(a+6,N)]);
-  const W=st.workers.filter(w=>String(w.name||"").trim()); const nr=Math.max(14,W.length);
+  const W=filled?st.workers.filter(w=>String(w.name||"").trim()):[]; const nr=Math.max(14,W.length);
   const cg=`<colgroup><col style="width:16pt"><col style="width:92pt"><col style="width:36pt">${weeks.map(([a,b])=>`${'<col style="width:15pt">'.repeat(b-a+1)}<col style="width:31pt">`).join("")}<col style="width:34pt"><col style="width:38pt"></colgroup>`;
   let h=`<div class="sheet land"><div class="shh"><b>FICHE DES OUVRIERS - ${MONTHS_FR[st.month-1].toUpperCase()} ${st.year}</b><span>Atelier / Groupe : ______________________</span></div>
   <div class="shs">Heures en chiffres (ex. 9). Absent = A ou X. Case vide = 0 h. Cases grises = dimanche (pas de travail). Avance = avance (DH). Prix/h en DH.</div><table class="ft">${cg}
@@ -1102,13 +1135,13 @@ function sheetWorkers(filled){
   h+=`<table class="ft gb">${cg}<tr><th colspan="${3+weeks.reduce((s,[a,b])=>s+b-a+2,0)+2}">EFFECTIF PAR GROUPE : nombre d'ouvriers PRESENTS chaque jour (case vide = le groupe n'a pas travaille)</th></tr>
   <tr><th>G</th><th>Responsable du groupe</th><th></th>${weeks.map(([a,b])=>{let s="";for(let d=a;d<=b;d++)s+=`<th class="${isSun(d)?"sg":""}">${d}</th>`;return s+`<th class="sm">Total sem.</th>`}).join("")}<th>Total<br>j x ouvr.</th><th></th></tr>`;
   const colT={}; let allT=0;
-  for(let gi=1;gi<=10;gi++){ const g=String(gi), o=st.groups[g]; h+=`<tr class="rw g"><td>${g}</td><td class="ink">${o?esc(o.resp):""}</td><td></td>`; let gt=0;
+  for(let gi=1;gi<=10;gi++){ const g=String(gi), o=st.groups[g]; h+=`<tr class="rw g"><td>${g}</td><td class="ink">${filled&&o?esc(o.resp):""}</td><td></td>`; let gt=0;
     weeks.forEach(([a,b])=>{ let ws=0; for(let d=a;d<=b;d++){ const x=String((st.heads[g]||{})[d]??"").trim(); let v=""; if(filled&&o&&x!==""){ v=isAbs(x)?"X":x; const n=isAbs(x)?0:(num(x)||0); ws+=n; colT[d]=(colT[d]||0)+n; } h+=`<td class="ink ${isSun(d)?"sg":""}">${esc(v)}</td>`; } gt+=ws; h+=`<td class="ink b">${filled&&o&&ws?ws:""}</td>`; });
     allT+=gt; h+=`<td class="ink b">${filled&&o&&gt?gt:""}</td><td></td></tr>`; }
   h+=`<tr class="rw tt g"><td></td><td>TOTAL</td><td></td>${weeks.map(([a,b])=>{let s="";for(let d=a;d<=b;d++)s+=`<td class="ink ${isSun(d)?"sg":"lt"}">${filled&&colT[d]?colT[d]:""}</td>`;return s+`<td class="lt"></td>`}).join("")}<td class="ink">${filled?allT:""}</td><td></td></tr></table>`;
-  const CH=st.charges.filter(c=>c.name||c.amount); const TC=CH.reduce((s,c)=>s+(num(c.amount)||0),0);
+  const CH=filled?st.charges.filter(c=>c.name||c.amount):[]; const TC=CH.reduce((s,c)=>s+(num(c.amount)||0),0), BL=filled?"":"<tr><td>&nbsp;</td><td class=\"ink\"></td></tr>".repeat(9);
   h+=`<div class="boxes"><div class="bx b1"><b>INSTRUCTIONS D'ANALYSE (pour Claude) - Fiche Ouvriers</b><p>1. Recopier d'abord le tableau lu sur la photo. Chiffre, lettre ou nom illisible, rature ou surcharge : poser la question, ne pas deviner.<br>2. A ou X = absent (0 h). Case vide = 0 h. Dimanches en gris = pas de travail. Demi-heures : 7,5.<br>3. Par ouvrier : heures, total heures, prix/h (deja ecrit), Brut = heures x prix, avances, Net = Brut - avances ; ligne TOTAL.<br>4. Classements : par heures et par Net (ex aequo = meme rang).<br>5. Alertes : heures un dimanche ; plus de 12 h par jour ; avances &gt; Brut ; Total heures different de la somme des jours ; jours absents.<br>6. Effectif par groupe : sert au calcul Jours x Ouvriers (samedi 0,5, dimanche 0).<br>7. Charges fixes : repartir sur Jours x Ouvriers (cout complet par piece). Sortie : PDF en francais, reponses courtes.</p></div>
-  <div class="bx b2"><b>CHARGES FIXES DU MOIS (DH)</b><table class="ch">${CH.map(c=>`<tr><td>${esc(c.name)}</td><td class="ink">${fa(num(c.amount)||0)}</td></tr>`).join("")}<tr class="tt"><td>TOTAL</td><td class="ink">${fa(TC)}</td></tr></table></div>
+  <div class="bx b2"><b>CHARGES FIXES DU MOIS (DH)</b><table class="ch">${CH.map(c=>`<tr><td>${esc(c.name)}</td><td class="ink">${fa(num(c.amount)||0)}</td></tr>`).join("")}${BL}<tr class="tt"><td>TOTAL</td><td class="ink">${filled?fa(TC):""}</td></tr></table>${filled&&(st.monthly||[]).filter(x=>String(x.name||"").trim()||num(x.amount)).length?`<b style="display:block;margin-top:6px">SALAIRES MENSUELS (DH) <small>(repartis par jour)</small></b><table class="ch">${(st.monthly||[]).filter(x=>String(x.name||"").trim()||num(x.amount)).map(x=>`<tr><td>${esc(x.name)}</td><td class="ink">${fa(num(x.amount)||0)}</td></tr>`).join("")}</table>`:""}</div>
   <div class="bx b3"><b>CORRECTIONS / REMARQUES</b><p>Si une case est corrigee, ne pas ecraser : barrer et ecrire ici (ouvrier, jour, bonne valeur).</p></div></div></div>`;
   return h;
 }
@@ -1237,11 +1270,12 @@ function p1(R){
   b+=`</table><div class="small">الرقم بين قوسين = الرتبة. * مجموعة بتوقع حتى نهاية موديلاتها الجارية.</div></div>
   <div><h3>العمال (أجر الساعة الحقيقي)</h3><table><tr><th>العامل</th><th>د/ساعة</th><th>الساعات</th><th>الحضور</th><th>الإجمالي</th><th>السلفة</th><th>الصافي</th></tr>`;
   R.WK.slice().sort((a,b)=>a.rn-b.rn).forEach(x=>{ b+=`<tr><td class="l">${x.rn}. ${esc(x.n)}</td><td>${x.rate===null?"؟":fa(x.rate)}</td><td>${fa(x.h,1)}</td><td>${fa(x.pres)}/${fa(x.pres+x.ab)}</td><td>${fa(x.brut)}</td><td>${x.av?fa(x.av):"—"}</td><td><b>${fa(x.net)}</b></td></tr>`; });
-  b+=`<tr class="tot"><td class="l">المجموع</td><td></td><td>${fa(R.HOURS,1)}</td><td></td><td>${fa(R.WAGES)}</td><td>${fa(R.WK.reduce((s,x)=>s+x.av,0))}</td><td>${fa(R.WK.reduce((s,x)=>s+x.net,0))}</td></tr></table></div></div>`;
+  (R.MWL||[]).forEach(x=>{ b+=`<tr><td class="l">${esc(x.n)} <small>(شهري)</small></td><td>—</td><td>—</td><td>—</td><td>${fa(x.acc)}</td><td>—</td><td><b>${fa(x.acc)}</b></td></tr>`; });
+  b+=`<tr class="tot"><td class="l">المجموع</td><td></td><td>${fa(R.HOURS,1)}</td><td></td><td>${fa(R.WAGES)}</td><td>${fa(R.WK.reduce((s,x)=>s+x.av,0))}</td><td>${fa(R.WK.reduce((s,x)=>s+x.net,0)+(R.MW||0))}</td></tr></table></div></div>`;
   const topG=R.okg.slice().sort((a,b)=>rv[a]-rv[b]), tN=R.WK.filter(x=>x.rn===1).map(x=>x.n).join(" و"), tH=R.WK.filter(x=>x.rh===1).map(x=>x.n).join(" و");
   b+=`<div class="box"><b>الخلاصة:</b><ul>${topG.length?`<li><b>قيمة اليوم/عامل:</b> ${topG.map(g=>`G${g} ${esc(GN(g))} (${fa(GV[g].vj,1)})`).join(" ، ")}.</li>`:""}
   <li><b>الأكبر مبلغاً:</b> ${Object.keys(GV).filter(g=>rm[g]===1).map(g=>`G${g} ${esc(GN(g))} (${fa(GV[g].mt)} درهم)`).join(" ، ")||"—"}.</li>
-  <li><b>العمال:</b> الأول في الصافي ${esc(tN)} (${fa(Math.max(...R.WK.map(x=>x.net)))} درهم) ؛ الأول في الساعات ${esc(tH)} (${fa(Math.max(...R.WK.map(x=>x.h)),1)}). المجموع ${fa(R.HOURS,1)} ساعة = ${fa(R.WAGES)} درهم.</li></ul></div></div>`;
+  <li><b>العمال:</b> الأول في الصافي ${esc(tN)} (${fa(Math.max(...R.WK.map(x=>x.net)))} درهم) ؛ الأول في الساعات ${esc(tH)} (${fa(Math.max(...R.WK.map(x=>x.h)),1)}). المجموع ${fa(R.HOURS,1)} ساعة = ${fa(R.WAGES-(R.MW||0))} درهم${R.MW?` + أجور شهرية ${fa(R.MW)} درهم = ${fa(R.WAGES)}`:""}.</li></ul></div></div>`;
   return b;
 }
 function p2(R){
@@ -1253,9 +1287,10 @@ function p2(R){
     L.forEach((r,k)=>{ const gt=r.fin?"":"≥ "; b+=`<tr><td class="l">${k===0?`<b>G${g} – ${esc(GN(g))}</b>`:""}</td><td class="l">${esc(r.m)}</td><td>${r.fin?"منتهٍ ✔":"جارٍ"}</td><td>${fa(r.q)}</td><td>${fa(r.p,2)}</td><td><b>${(!r.fin&&r.hourly?"≥ ":"")+fa(r.real,2)}</b></td><td>${gt+fa(r.oh,2)}</td><td><b>${gt+fa(r.full,2)}</b></td><td>${fa(r.q*r.p)}</td><td></td></tr>`; });
     b+=`<tr class="tot"><td class="l" colspan="3">مجموع G${g} – ${esc(GN(g))}</td><td>${fa(L.reduce((s,r)=>s+r.q,0))}</td><td></td><td></td><td></td><td></td><td>${fa(tv)}</td><td><b>${perf}</b></td></tr>`; });
   b+=`<tr class="g"><td colspan="8">المجموع العام (${M.length} موديلاً)</td><td colspan="2">${fa(TV)} درهم</td></tr></table>
-  <div class="small">التكلفة الكاملة = الثمن + حصة أجور عمال الساعات + المصاريف الثابتة (${fa(R.TC)} د/شهر، موزعة يومياً بالتساوي على المجموعات الموجودة)؛ الثمن الفعلي = الثمن + الأجور فقط. ≥ للجارية (حتى ${dm(R.TODAY)}).</div>
-  <h3>2. عمال الساعات</h3><table><tr><th>العامل</th><th>ثمن الساعة (درهم)</th><th>عدد الساعات</th><th>المجموع (درهم)</th></tr>`;
+  <div class="small">التكلفة الكاملة = الثمن + حصة الأجور (عمال الساعات والأجور الشهرية) + المصاريف الثابتة (${fa(R.TC)} د/شهر، موزعة يومياً بالتساوي على المجموعات الموجودة)؛ الثمن الفعلي = الثمن + الأجور فقط. ≥ للجارية (حتى ${dm(R.TODAY)}).</div>
+  <h3>2. العمال (الساعات والأجور الشهرية)</h3><table><tr><th>العامل</th><th>ثمن الساعة (درهم)</th><th>عدد الساعات</th><th>المجموع (درهم)</th></tr>`;
   R.WK.forEach(x=>{ b+=`<tr><td class="l"><b>${esc(x.n)}</b></td><td>${x.rate===null?"؟":fa(x.rate)}</td><td>${fa(x.h,1)}</td><td><b>${fa(x.brut)}</b></td></tr>`; });
+  (R.MWL||[]).forEach(x=>{ b+=`<tr><td class="l"><b>${esc(x.n)}</b> <small>(أجر شهري ${fa(x.amt)})</small></td><td>—</td><td>—</td><td><b>${fa(x.acc)}</b></td></tr>`; });
   b+=`<tr class="tot"><td class="l">المجموع</td><td></td><td>${fa(R.HOURS,1)}</td><td>${fa(R.WAGES)}</td></tr></table></div>`;
   return b;
 }
@@ -1296,10 +1331,11 @@ function p4(R){
   <table><tr><th>البند</th><th>المبلغ</th><th>النسبة</th><th>لكل يوم عمل</th></tr>`;
   CH.forEach(c=>{ const v=num(c.amount); b+=`<tr><td class="l">${esc(c.name)}</td><td>${fa(v)}</td><td>${fa(100*v/R.TC,1)}%</td><td>${fa(v/R.WDm,1)}</td></tr>`; });
   b+=`<tr class="tot"><td class="l">المجموع</td><td>${fa(R.TC)}</td><td>100%</td><td>${fa(R.TC/R.WDm,1)}</td></tr></table>
+  ${(R.MWL||[]).length?`<h3>الأجور الشهرية (تُوزَّع يومياً على المجموعات)</h3><table><tr><th>الاسم</th><th>الأجر الشهري</th><th>لكل يوم عمل</th><th>المحتسب حتى ${dm(R.TODAY)}</th></tr>${R.MWL.map(x=>`<tr><td class="l">${esc(x.n)}</td><td>${fa(x.amt)}</td><td>${fa(x.amt/R.WDm,1)}</td><td>${fa(x.acc)}</td></tr>`).join("")}<tr class="tot"><td class="l">المجموع</td><td>${fa(R.MWT)}</td><td>${fa(R.MWT/R.WDm,1)}</td><td>${fa(R.MW)}</td></tr></table>`:""}
   <h3>قيمة اليوم/عامل بعد المصاريف (الموديلات المنتهية)</h3><table><tr><th>المجموعة</th><th>قيمة اليوم/عامل</th><th>حصة المصاريف/يوم×عامل</th><th>الباقي</th></tr>`;
   R.okg.slice().sort((a,c)=>R.rv[a]-R.rv[c]).forEach(g=>{ const v=R.GV[g].vj; b+=`<tr><td class="l">G${g} – ${esc(GN(g))}</td><td>${fa(v,1)}</td><td>${fa(R.ohG[g],1)}</td><td><b>${fa(v-R.ohG[g],1)}</b></td></tr>`; });
   if(R.TW) b+=`<tr class="tot"><td class="l">المعدل (المنتهية)</td><td>${fa(R.TM/R.TW,1)}</td><td>${fa(R.ohA,1)}</td><td>${fa(R.TM/R.TW-R.ohA,1)}</td></tr>`;
-  b+=`</table><div class="box"><b>كيف حُسب:</b><ul><li>المصاريف ${fa(R.TC)} ÷ أيام العمل ${fa(R.WDm,1)} = مصاريف اليوم (الأحد 0 والسبت نصف). تُقسم كل يوم بالتساوي على المجموعات الموجودة ذلك اليوم (واحدة أو اثنتان أو عشر)، ثم على موديلاتها المفتوحة بنسبة الكمية. «د لكل يوم×عامل» في هذا الجدول = المصاريف المحمّلة على المجموعة ÷ يوم×عامل فيها.</li><li>أجور عمال الساعات: أجور كل يوم تُقسَّم بالتساوي على المجموعات العاملة ذلك اليوم، ثم على موديلاتها المفتوحة بنسبة الكمية. الحساب من أول الشهر.</li><li>«الباقي» = قيمة اليوم/عامل − حصة المصاريف، ولا يشمل أجور عمال الساعات (${fa(R.WAGES)} درهم) فهي في الثمن الفعلي للقطعة.</li></ul></div>
+  b+=`</table><div class="box"><b>كيف حُسب:</b><ul><li>المصاريف ${fa(R.TC)} ÷ أيام العمل ${fa(R.WDm,1)} = مصاريف اليوم (الأحد 0 والسبت نصف). تُقسم كل يوم بالتساوي على المجموعات الموجودة ذلك اليوم (واحدة أو اثنتان أو عشر)، ثم على موديلاتها المفتوحة بنسبة الكمية. «د لكل يوم×عامل» في هذا الجدول = المصاريف المحمّلة على المجموعة ÷ يوم×عامل فيها.</li><li>الأجور الشهرية (إن وُجدت) تُقسَّم على أيام العمل وتدخل في أجور اليوم مع عمال الساعات.</li><li>أجور عمال الساعات: أجور كل يوم تُقسَّم بالتساوي على المجموعات العاملة ذلك اليوم، ثم على موديلاتها المفتوحة بنسبة الكمية. الحساب من أول الشهر.</li><li>«الباقي» = قيمة اليوم/عامل − حصة المصاريف، ولا يشمل أجور عمال الساعات (${fa(R.WAGES)} درهم) فهي في الثمن الفعلي للقطعة.</li></ul></div>
   <h3>الربح أو الخسارة لكل موديل (ثمن البيع − التكلفة الكاملة)</h3><table><tr><th>الموديل</th><th>الحالة</th><th>الكمية</th><th>ثمن البيع</th><th>التكلفة الكاملة</th><th>الربح/قطعة</th><th>النسبة</th><th>الربح الكلي</th></tr>`;
   const sold=r=>r.sp!==null;
   G.forEach(g=>{ const L=M.filter(r=>r.g===g); if(!L.length) return; const S=L.filter(sold), tp=S.reduce((s,r)=>s+r.pf*r.q,0), ts=S.reduce((s,r)=>s+r.sp*r.q,0);
@@ -1332,6 +1368,7 @@ function todoCard(R){
     const ng=R.G.filter(g=>R.M.some(r=>r.g===g&&!r.fin)&&String((st.heads[g]||{})[d]??"").trim()==="");
     add(!ng.length,"عدد عمال المجموعات مُدخل","عدد العمال ناقص: "+ng.map(g=>"G"+g).join("، "),"groups");
   }
+  const nm=(st.monthly||[]).filter(x=>String(x.name||"").trim()&&!num(x.amount)); if(nm.length) add(false,"","أجر شهري لم يُدخل: "+nm.map(x=>esc(x.name)).join("، "),"costs","o");
   const od=R.M.filter(r=>!r.fin&&r.fc&&r.fc.end!=null&&r.fc.end<R.TODAY);
   if(od.length) add(false,"","تجاوزت نهايتها المتوقعة: "+od.map(r=>esc(r.m)).join("، ")+" — سجّل النهاية أو حدّثها","models","o");
   const thr=stgDays(), sk=allM(R).map(r=>({r,si:stageInfo(r,R)})).filter(x=>x.si.days!==null&&x.si.days>thr&&x.si.k<DLV);
@@ -1365,7 +1402,7 @@ function stageTrail(r,R,si){ if(si.k<2) return ""; const h=si.hist||{}, D=j=>j==
   for(let j=2;j<=Math.min(si.k,5);j++){ const a=D(j), b=j<si.k?D(j+1):R.TODAY; const n=(a!=null&&b!=null)?Math.max(0,Math.round((b-a)/DAY)):null; out.push(`<span class="bdg ${j===si.k&&n!==null&&n>stgDays()?"bad":""}">${STAGES[j]}: ${n===null?"—":fa(n)+" ي"}${j===si.k?" (الآن)":""}</span>`); }
   return `<div class="note" style="margin-top:4px">أيام كل مرحلة: ${out.join(" ")}</div>`; }
 function stageStrip(r,R){ const {k,days}=stageInfo(r,R);
-  return `<div class="stg">${STAGES.map((n,j)=>`<button class="sc ${j<k?"d":j===k?"c":""}" data-stg="${r.i}:${j}">${n}</button>`).join("")}</div>${days!==null?`<div class="note ${days>stgDays()?"neg":""}">مرّت ${fa(days)} ${days===1?"يوم":"أيام"} في هذه المرحلة</div>`:""}${stageTrail(r,R,{k,days,hist:(st.models[r.i]||{}).hist})}`; }
+  return `<div class="stg">${STAGES.map((n,j)=>`<span class="sc ${j<k?"d":j===k?"c":""}" style="cursor:default">${n}</span>`).join("")}</div><div class="note">لتحريك المرحلة: تبويب «التتبع».</div>${days!==null?`<div class="note ${days>stgDays()?"neg":""}">مرّت ${fa(days)} ${days===1?"يوم":"أيام"} في هذه المرحلة</div>`:""}${stageTrail(r,R,{k,days,hist:(st.models[r.i]||{}).hist})}`; }
 function setStage(x){ const [i,k]=x.split(":").map(Number), m=st.models[i]; if(!m) return; if(Number(m.stage)===k&&m.stage!=="") return; m.stage=k; m.stageDate=st.today; m.hist=m.hist||{}; Object.keys(m.hist).forEach(j=>{ if(Number(j)>=k) delete m.hist[j]; }); m.hist[k]=st.today; save(); const y=window.scrollY; ({home:vHome,report:vReport,track:vTrack})[tab]&&({home:vHome,report:vReport,track:vTrack})[tab](); window.scrollTo(0,y); }
 
 let trkF="all";
@@ -1428,7 +1465,7 @@ function alerts(R){ const a=[], d=new Date(R.TODAY).getUTCDate();
   R.M.filter(r=>r.sp===null).forEach(r=>a.push(["o",`${esc(r.m)}: ثمن البيع غير مكتوب`,"models"]));
   if(R.incomplete.length) a.push(["o",`${R.incomplete.length} موديل ناقص (مجموعة/كمية/ثمن/بداية) خارج الحساب`,"models"]);
   R.M.filter(r=>!r.fin&&r.a<=R.TODAY&&(R.TODAY-r.a)/DAY+1>=st.longDays).forEach(r=>a.push(["b",`${esc(r.m)}: جارٍ منذ ${Math.round((R.TODAY-r.a)/DAY+1)} يوماً`,"report"]));
-  { const ag=bkAge(); if(ag===null||ag>=5) a.push(["o",ag===null?"لم تُحفظ نسخة احتياطية بعد":`آخر نسخة احتياطية منذ ${ag} أيام`,"costs","top"]); }
+  
   R.WK.forEach(w=>{ if(w.over.length) a.push(["o",`${esc(w.n)}: أكثر من 12 ساعة في ${w.over.length} يوم`,"workers"]); if(w.norate) a.push(["o",`${esc(w.n)}: بلا أجر ساعة`,"workers"]); if(w.sunH.length) a.push(["b",`${esc(w.n)}: ساعات يوم الأحد`,"workers"]); });
   return a; }
 function wageProj(R){
@@ -1485,13 +1522,12 @@ function homeParts(R,ts,al){
 let homeAll=false, showSum=false;
 function vHome(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), tp=S.reduce((s,r)=>s+r.pf*r.q,0), ts=S.reduce((s,r)=>s+r.sp*r.q,0), op=R.M.filter(r=>!r.fin), al=alerts(R), P=homeParts(R,ts,al);
   const kt=(l,v,c)=>`<div class="kt"><small>${l}</small><b class="${c||""}">${v}</b></div>`;
-  view.innerHTML=`${todoCard(R)}${P.top}${pdfReady()?`<div class="bar">${window.claude?'<button class="btn" id="dypdf">تقرير اليوم PDF</button>':'<button class="btn" id="dypdf">تقرير اليوم PDF</button><button class="btn alt" id="dyshare">مشاركة</button>'}</div>`:""}<div id="dypg" style="display:none">${brand(R,dayPage(R,ts,al))}</div><div class="kts">${kt("أجور الشهر",fa(R.WAGES)+" د")}${kt("موديلات منتهية",fa(R.M.length-op.length)+`<small>${fa(R.TQ)} قطعة</small>`)}${kt("موديلات جارية",fa(op.length)+`<small>${fa(op.reduce((s,r)=>s+r.q,0))} قطعة</small>`)}${kt("قيمة الجارية",fa(R.MoOn)+" د")}</div>${P.groups}${homeCharts(R)}${homeStages(R)}<details class="card"><summary><b>ما يجب أداؤه</b></summary>${(()=>{ const gr=R.WAGES, adv=R.WK.reduce((s,w)=>s+w.av,0), net=gr-adv, due=R.TC+net+R.TM, row=(l,v,x)=>`<div class="wn" style="padding:6px 0;${x||""}"><span>${l}</span><b>${fa(v)} د</b></div>`;
+  view.innerHTML=`${P.top}<div class="kts">${kt("أجور الشهر",fa(R.WAGES)+" د")}${kt("موديلات منتهية",fa(R.M.length-op.length)+`<small>${fa(R.TQ)} قطعة</small>`)}${kt("موديلات جارية",fa(op.length)+`<small>${fa(op.reduce((s,r)=>s+r.q,0))} قطعة</small>`)}${kt("قيمة الجارية",fa(R.MoOn)+" د")}</div>${P.groups}${homeCharts(R)}<details class="card"><summary><b>ما يجب أداؤه</b></summary>${(()=>{ const gr=R.WAGES, adv=R.WK.reduce((s,w)=>s+w.av,0), net=gr-adv, due=R.TC+net+R.TM, row=(l,v,x)=>`<div class="wn" style="padding:6px 0;${x||""}"><span>${l}</span><b>${fa(v)} د</b></div>`;
   return row("المصاريف الثابتة",R.TC)+row("أجور العمال (إجمالي)",gr)+row("مجموع السلفات (تُخصم)",adv)+row("أجور المجموعات المنتهية",R.TM)+row("المجموع المستحق الآن",due,"border-top:2px solid var(--line);font-size:17px;margin-top:4px")+row("أجور المجموعات غير المنتهية (لم تُستحق بعد)",R.MoOn,"color:var(--mut)"); })()}</details>
   <details class="card"><summary><b>تفاصيل النتيجة والتقدير</b></summary>${(()=>{ const cost=R.TC+R.WAGES+R.TM+R.MoOn, res=ts-cost, row=(l,v,x)=>`<div class="wn" style="padding:6px 0;${x||""}"><span>${l}</span><b>${fa(v)} د</b></div>`;
   return row("مجموع قيمة البيع",ts)+row("إجمالي التكاليف (ثابتة + عمال + كل المجموعات)",cost)+`<div class="wn" style="padding:6px 0;border-top:2px solid var(--line);font-size:17px;margin-top:4px"><span>${res<0?"صافي الخسارة":"صافي الربح"}</span><b class="${res<0?"neg":""}" style="${res<0?"":"color:var(--ok)"}">${fa(res)} د${ts?" ("+fa(100*res/ts,1)+"%)":""}</b></div><div class="note">يشمل كل الموديلات؛ أجور العمال حتى اليوم والمصاريف الثابتة للشهر كاملاً، دون أجور عمال لاحقة على الموديلات الجارية.</div>`+(()=>{ const W=wageProj(R); if(!W||!W.rem) return ""; const r2=res-W.extra;
     return `<div style="border-top:1px dashed var(--line);margin-top:8px;padding-top:6px"><b>تقدير حتى نهاية الجارية (${dm(W.end)})</b>`+row("أجور الساعات المتبقية ≈ ("+fa(W.rem,W.rem%1?1:0)+" يوم × "+fa(W.perDay)+")",W.extra)+`<div class="wn" style="padding:6px 0;font-size:17px"><span>${r2<0?"صافي الخسارة المتوقع":"صافي الربح المتوقع"}</span><b class="${r2<0?"neg":""}" style="${r2<0?"":"color:var(--ok)"}">≈ ${fa(r2)} د${ts?" ("+fa(100*r2/ts,1)+"%)":""}</b></div><div class="note">تقدير: ${W.manual?"أجر اليوم الذي أدخلتَه":"متوسط أجور اليوم المسجّلة حتى الآن"} × أيام العمل المتبقية إلى آخر نهاية متوقعة لموديل جارٍ ساعيّ.${W.beyond?" تمتد بعد نهاية الشهر (مصاريف الشهر التالي غير محسوبة).":""}${W.missing.length?" لم يدخل: "+W.missing.map(esc).join("، ")+" (بلا نهاية متوقعة).":""}</div></div>`; })(); })()}</details>
-  ${P.others}
-  <h2>الطلبيات غير المسلَّمة</h2>${(()=>{ const cur=allM(R).filter(r=>stageInfo(r,R).k<DLV).sort((a,b)=>Number(a.g)-Number(b.g)||a.i-b.i); return cur.length?cur.map(r=>mCard(r,R)).join(""):'<div class="note">كل الموديلات مسلَّمة.</div>'; })()}`;
+  ${P.others}`;
   view.oninput=null; view.onclick=e=>{ const t=e.target, g=t.dataset.go; if(t.dataset.stg) return setStage(t.dataset.stg); if(t.id==="tgbk"){ t.disabled=true; return doBackup(true).then(m=>{ t.disabled=false; if(/تمت/.test(m)) vHome(); else alert(m); }); } if(t.id==="dypdf") return exportPdf(t,"#dypg .rp","p","تقرير_اليوم_"+new Date(R.TODAY).toISOString().slice(0,10)+".pdf"); if(t.id==="dyshare") return sharePdf(t,"#dypg .rp","p","تقرير_اليوم_"+new Date(R.TODAY).toISOString().slice(0,10)+".pdf"); if(g) return go(g); if(t.dataset.setday){ st.today=t.dataset.setday; save(); return vHome(); } if(t.dataset.act==="allopen"){ homeAll=!homeAll; return vHome(); }
     if(t.dataset.act==="sum"){ showSum=!showSum; return vHome(); }
     if(t.dataset.act==="shr"){ const tx=daySummary(R,ts); if(navigator.share){ navigator.share({text:tx}).catch(()=>{}); } else { window.open("https://wa.me/?text="+encodeURIComponent(tx),"_blank"); } return; }
@@ -1519,7 +1555,18 @@ function vToday(){ const iso=tDate||st.today, [y,m,d]=iso.split("-").map(Number)
     else if(gr){ const o=st.heads[gr.dataset.g]=st.heads[gr.dataset.g]||{};
       if(b.dataset.s) o[d]=String(Math.max(0,(num(o[d])||0)+ +b.dataset.s)); else if(b.dataset.hv!==undefined) o[d]=b.dataset.hv; save(); vToday(); } }; }
 
-addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["home","today","track","workers","groups","models","costs","forms","report"].includes(t)) go(t); });
+addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick"].includes(t)) go(t); });
+{ const f=vToday; vToday=function(){ f(); decor("today"); }; }
+{ const f=vWorkers; vWorkers=function(){ f(); decor("workers"); }; }
+{ const f=vGroups; vGroups=function(){ f(); decor("groups"); }; }
+{ const f=vModels; vModels=function(){ f(); decor("models"); }; }
+{ const f=vTrack; vTrack=function(){ f(); decor("track"); }; }
+{ const f=vReport; vReport=function(){ f(); decor("report"); }; }
+{ const f=vCompare; vCompare=function(){ f(); decor("cmp"); }; }
+{ const f=vQuick; vQuick=function(){ f(); decor("quick"); }; }
+{ const f=vForms; vForms=function(){ f(); decor("forms"); }; }
+view.addEventListener("click",e=>{ const s=e.target.closest("[data-sub]"); if(s){ e.stopImmediatePropagation(); e.preventDefault(); return go(s.dataset.sub); }
+  const w=e.target.closest("#todoWrap"); if(w){ const b=e.target.closest("button"); if(!b) return; e.stopImmediatePropagation(); if(b.dataset.go) return go(b.dataset.go); if(b.dataset.setday){ st.today=b.dataset.setday; save(); return go(tab); } if(b.id==="tgbk"){ b.disabled=true; return doBackup(true).then(()=>go(tab)); } } },true);
 go(tab);
 if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
