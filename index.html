@@ -673,11 +673,11 @@ function compute(st){
   const dayW={}; st.workers.forEach(w=>{ const rt=num(w.rate)||0; days.forEach(d=>{ const v=String((w.hours||{})[d]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v); if(n!==null) dayW[d]=(dayW[d]||0)+n*rt; }); });
   if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
-  winDays.forEach(t=>{ const W=dayW[dnum(t)]||0; if(!W) return;
+  winDays.forEach(t=>{ const W=dayW[dnum(t)]||0; if(!W) return; const Wm=(MWD>0&&dw(t)>0)?MWD*dw(t):0;
     const el=G.filter(g=>st.groups[g].hourly && hc(g,t)>0 && M.some(r=>r.g===g && open(r,t,true)));
     if(!el.length){ UNAL+=W; return; }
     const sh=W/el.length;
-    el.forEach(g=>{ const op=M.filter(r=>r.g===g && open(r,t,true)), tq=op.reduce((s,r)=>s+r.q,0); op.forEach(r=>{ r.wages=(r.wages||0)+sh*r.q/tq; }); });
+    el.forEach(g=>{ const op=M.filter(r=>r.g===g && open(r,t,true)), tq=op.reduce((s,r)=>s+r.q,0); op.forEach(r=>{ r.wages=(r.wages||0)+sh*r.q/tq; r.wagesM=(r.wagesM||0)+(Wm/el.length)*r.q/tq; }); });
   });
   const RATE_W=0;
   M.forEach(r=>{ r.wages=r.wages||0; r.add=r.wages/r.q; r.real=r.p+r.add; r.hourly=st.groups[r.g].hourly; });
@@ -819,7 +819,7 @@ const mLabel=()=>`${MONTHS[st.month-1]} ${st.year}`;
 const isSun=d=>new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()===0;
 const wdl=d=>"DLMMJVS"[new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()];
 let tab=(location.hash||"#menu").slice(1);
-if(!["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick"].includes(tab)) tab="menu";
+if(!["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit"].includes(tab)) tab="menu";
 
 
 /* ---------- المقارنة بين الأشهر ---------- */
@@ -916,12 +916,46 @@ function vQuick(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), ts=S.reduc
   view.oninput=null; view.onchange=null; view.onclick=e=>{ const i=e.target.id, iso=new Date(R.TODAY).toISOString().slice(0,10), fm="تقرير_نهاية_الشهر_"+st.year+"-"+st.month+".pdf", fd="تقرير_اليوم_"+iso+".pdf";
     if(i==="dypdf") exportPdf(e.target,"#dypg .rp","p",fd); if(i==="dyshare") sharePdf(e.target,"#dypg .rp","p",fd); if(i==="mepdf") exportPdf(e.target,"#mepg .rp","p",fm); if(i==="meshare") sharePdf(e.target,"#mepg .rp","p",fm); };
 }
-const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],report:["report","cmp","quick","forms"],costs:["costs"]};
-const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",report:"التقرير الشامل",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
+const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],report:["report","profit","cmp","quick","forms"],costs:["costs"]};
+const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",report:"التقرير الشامل",profit:"جدول الأرباح",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
 const secOf=t=>Object.keys(SEC).find(k=>SEC[k].includes(t))||t;
 function subNav(k){ const L=SEC[secOf(k)]||[]; if(L.length<2) return ""; return `<div class="stg noprint" style="margin:0 0 10px">${L.map(x=>`<button class="sc ${x===k?"c":""}" data-sub="${x}">${SUBL[x]}</button>`).join("")}</div>`; }
 function decor(k){ if(tab!==k) return; view.insertAdjacentHTML("afterbegin",subNav(k)+(k==="today"?`<div id="todoWrap">${todoCard(compute(st))}</div>`:"")); }
-function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
+
+/* ---------- جدول الأرباح بالموديل ---------- */
+let pF="all";
+function profitRows(R){ return R.M.slice().sort((a,b)=>Number(a.g)-Number(b.g)||a.i-b.i).map(r=>{ const m=st.models[r.i]||{}; return {r,m,sale:r.sp===null?null:r.sp*r.q,gp:r.q*r.p,wm:r.wagesM||0,wh:(r.wages||0)-(r.wagesM||0),fx:r.ohAcc||0,bill:!!m.bill}; }); }
+function profitTotals(R,rows,isAll){
+  const S=k=>rows.reduce((s,x)=>s+(x[k]||0),0), un=isAll?((R.UNAL||0)+(R.OHUN||0)):0, sale=S("sale"), gp=S("gp"), wh=S("wh"), wm=S("wm"), fx=S("fx");
+  return {wh,wm,fx,un,sale,gp,res:sale-gp-wh-wm-fx-un,fxFull:R.TC};
+}
+function profitBox(T,R){ const row=(l,v,x)=>`<div class="wn" style="padding:5px 0;${x||""}"><span>${l}</span><b>${fa(v)} د</b></div>`;
+  return row("مجموع ثمن البيع",T.sale)+row("مجموع ثمن المجموعة",T.gp)+row("عمال الساعات (حتى "+dm(R.TODAY)+")",T.wh)+row("عمال الشهر (حتى "+dm(R.TODAY)+")",T.wm)+row("المصاريف الثابتة (حتى "+dm(R.TODAY)+")",T.fx)+(T.un?row("غير موزَّع على موديلات (أيام بلا موديل مفتوح)",T.un):"")+`<div class="wn" style="padding:6px 0;border-top:2px solid var(--line);font-size:17px;margin-top:4px"><span>${T.res<0?"خسارة":"ربح"} حتى الآن</span><b class="${T.res<0?"neg":""}" style="${T.res<0?"":"color:var(--ok)"}">${fa(T.res)} د${T.sale?" ("+fa(100*T.res/T.sale,1)+"%)":""}</b></div><div class="note">الحساب للموديلات المعروضة فقط: أجورها ومصاريفها المحمّلة عليها حتى اليوم. المصاريف الثابتة للشهر كاملاً ${fa(T.fxFull)} د. الموديلات الجارية: ثمنها كاملاً وتكلفتها حتى اليوم.</div>`; }
+function profitPage(R,rows,T){
+  const f=n=>fa(n), S=rows.reduce((s,x)=>s+(x.sale||0),0), P=rows.reduce((s,x)=>s+x.gp,0), row=(l,v,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${f(v)}</td></tr>`;
+  return `<div class="rp"><h1>جدول الأرباح بالموديل – ${mLabel()}</h1><div class="sub">الوضع في ${dm(R.TODAY)} &nbsp;|&nbsp; المبالغ بالدرهم (إجمالي كل موديل)</div>
+  <table><tr><th>المجموعة</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>الحالة</th></tr>
+  ${rows.map(x=>`<tr><td>G${x.r.g}</td><td class="l">${esc(x.r.m)}</td><td>${f(x.r.q)}</td><td>${f(x.gp)} <small>(${fa(x.r.p,2)}/ق)</small></td><td>${x.sale===null?"—":f(x.sale)+" <small>("+fa(x.r.sp,2)+"/ق)</small>"}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("")}
+  <tr class="tot"><td colspan="3" class="l">المجموع (${rows.length})</td><td>${f(P)}</td><td>${f(S)}</td><td></td></tr></table>
+  <h3>المصاريف حتى ${dm(R.TODAY)} والنتيجة</h3><table style="width:70%">${row("مجموع ثمن البيع",T.sale)}${row("مجموع ثمن المجموعة",T.gp)}${row("عمال الساعات",T.wh)}${row("عمال الشهر",T.wm)}${row("المصاريف الثابتة (حتى الآن)",T.fx)}${T.un?row("غير موزَّع على موديلات",T.un):""}${row((T.res<0?"خسارة":"ربح")+" حتى الآن"+(T.sale?" ("+fa(100*T.res/T.sale,1)+"%)":""),T.res,1)}</table>
+  <div class="small">النتيجة للموديلات الظاهرة في الجدول فقط، بأجورها ومصاريفها المحمّلة عليها حتى اليوم. المصاريف الثابتة للشهر كاملاً ${f(T.fxFull)} د.</div></div>`;
+}
+function vProfit(){
+  const R=compute(st), all=profitRows(R), q=x=>pF==="all"?true:pF==="fin"?x.r.fin:pF==="open"?!x.r.fin:x.bill, rows=all.filter(q), T=profitTotals(R,rows,pF==="all");
+  const cnt=v=>all.filter(x=>v==="all"?true:v==="fin"?x.r.fin:v==="open"?!x.r.fin:x.bill).length, chip=(v,l)=>`<button class="sc ${pF===v?"c":""}" data-pf="${v}">${l} (${fa(cnt(v))})</button>`;
+  const body=rows.map(x=>`<tr><td><input type="checkbox" data-bill="${x.r.i}" ${x.bill?"checked":""}></td><td>G${x.r.g}</td><td class="nm">${esc(x.r.m)}</td><td>${fa(x.r.q)}</td><td>${fa(x.gp)}<br><small>${fa(x.r.p,2)}/ق</small></td><td>${x.sale===null?"—":fa(x.sale)+"<br><small>"+fa(x.r.sp,2)+"/ق</small>"}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("");
+  const S=rows.reduce((s,x)=>s+(x.sale||0),0), P=rows.reduce((s,x)=>s+x.gp,0);
+  view.innerHTML=`<div class="note">اختر الموديلات التي ستطلب أداءها من العميل بالمربع الأول، ثم صفِّ بـ «للفوترة». المبالغ إجمالي كل موديل.</div>
+  <div class="stg" style="margin:0 0 8px">${chip("all","الكل")}${chip("fin","منتهية")}${chip("open","جارية")}${chip("bill","للفوترة")}</div>
+  <div class="scroll"><table class="g"><tr><th>للفوترة</th><th>G</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>الحالة</th></tr>${body||'<tr><td colspan="7">لا موديلات.</td></tr>'}<tr class="tot"><td></td><td colspan="3">المجموع (${fa(rows.length)})</td><td>${fa(P)}</td><td>${fa(S)}</td><td></td></tr></table></div>
+  <div class="card"><b>المصاريف والنتيجة حتى الآن — ${({all:"كل الموديلات",fin:"المنتهية",open:"الجارية",bill:"المحدد للفوترة"})[pF]} (${fa(rows.length)})</b>${profitBox(T,R)}</div>
+  ${pdfReady()?`<div class="bar"><button class="btn" id="ppdf">تصدير PDF</button>${window.claude?"":'<button class="btn alt" id="pshare">مشاركة</button>'}</div>`:""}
+  <div id="ppg" style="display:none">${brand(R,profitPage(R,rows,T))}</div>`;
+  view.oninput=null;
+  view.onchange=e=>{ const d=e.target.dataset; if(d.bill!==undefined){ const m=st.models[+d.bill]; if(m){ m.bill=e.target.checked; save(); const y=window.scrollY; vProfit(); window.scrollTo(0,y); } } };
+  view.onclick=e=>{ const d=e.target.dataset; if(d.pf){ pF=d.pf; return vProfit(); } if(e.target.id==="ppdf") exportPdf(e.target,"#ppg .rp","p","جدول_الأرباح_"+pF+".pdf"); if(e.target.id==="pshare") sharePdf(e.target,"#ppg .rp","p","جدول_الأرباح_"+pF+".pdf"); };
+}
+function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
 { const bh=document.getElementById("brandHome"); if(bh) bh.onclick=()=>go("menu"); }
 
@@ -1555,7 +1589,7 @@ function vToday(){ const iso=tDate||st.today, [y,m,d]=iso.split("-").map(Number)
     else if(gr){ const o=st.heads[gr.dataset.g]=st.heads[gr.dataset.g]||{};
       if(b.dataset.s) o[d]=String(Math.max(0,(num(o[d])||0)+ +b.dataset.s)); else if(b.dataset.hv!==undefined) o[d]=b.dataset.hv; save(); vToday(); } }; }
 
-addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick"].includes(t)) go(t); });
+addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit"].includes(t)) go(t); });
 { const f=vToday; vToday=function(){ f(); decor("today"); }; }
 { const f=vWorkers; vWorkers=function(){ f(); decor("workers"); }; }
 { const f=vGroups; vGroups=function(){ f(); decor("groups"); }; }
@@ -1564,6 +1598,7 @@ addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab &
 { const f=vReport; vReport=function(){ f(); decor("report"); }; }
 { const f=vCompare; vCompare=function(){ f(); decor("cmp"); }; }
 { const f=vQuick; vQuick=function(){ f(); decor("quick"); }; }
+{ const f=vProfit; vProfit=function(){ f(); decor("profit"); }; }
 { const f=vForms; vForms=function(){ f(); decor("forms"); }; }
 view.addEventListener("click",e=>{ const s=e.target.closest("[data-sub]"); if(s){ e.stopImmediatePropagation(); e.preventDefault(); return go(s.dataset.sub); }
   const w=e.target.closest("#todoWrap"); if(w){ const b=e.target.closest("button"); if(!b) return; e.stopImmediatePropagation(); if(b.dataset.go) return go(b.dataset.go); if(b.dataset.setday){ st.today=b.dataset.setday; save(); return go(tab); } if(b.id==="tgbk"){ b.disabled=true; return doBackup(true).then(()=>go(tab)); } } },true);
