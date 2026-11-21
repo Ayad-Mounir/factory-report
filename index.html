@@ -639,7 +639,7 @@ function compute(st){
     if(!m.g || !st.groups[m.g] || !q || p===null || !m.start) return;
     const a=pd(m.start), b=m.end?pd(m.end):null;
     if(a>mE || (b!==null && b<mS)){ EX.push({i, g:String(m.g), m:m.name, q, a, b, fin:b!==null, x:true}); return; }
-    M.push({i, g:String(m.g), m:m.name, q, p, sp:num(m.sale), a, b, an:Math.max(a,mS), fin:b!==null, fixed:num(m.fixed)||0, joint:(m.joint||"").trim(), plan:(m.plan&&!m.end)?pd(m.plan):null, done:num(m.done), wd:0});
+    M.push({i, g:String(m.g), m:m.name, q, p, sp:num(m.sale), a, b, an:Math.max(a,mS), fin:b!==null, fixed:0, joint:(m.joint||"").trim(), plan:(m.plan&&!m.end)?pd(m.plan):null, done:num(m.done), wd:0});
   });
   const incomplete = st.models.filter(m=>!(m.g && st.groups[m.g] && num(m.qty) && num(m.price)!==null && m.start));
 
