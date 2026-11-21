@@ -669,16 +669,19 @@ function compute(st){
   const wdAll=rng(mS,mE).reduce((s,t)=>s+dw(t),0), MWT=(st.monthly||[]).reduce((s,x)=>s+(num(x.amount)||0),0), MWD=wdAll>0?MWT/wdAll:0, MWacc=winDays.reduce((s,t)=>s+dw(t)*MWD,0);
   const WAGES = WK.reduce((s,x)=>s+x.brut,0)+MWacc, HOURS = WK.reduce((s,x)=>s+x.h,0);
 
-  // ---- wages allocation: each day's wages (hours x rate) split equally among the hourly groups working that day, then by quantity among the group's open models
+  // ---- wages allocation: each day's wages (hours x rate + monthly) split directly among all open models of the working hourly groups, weighted by value (qty x price)
   const open = (r,t,useAn) => (useAn?r.an:r.a)<=t && (r.b===null || r.b>=t);
+  // وزن الموديل في التوزيع = قيمته (الكمية × الثمن)؛ والعمال يتنقلون بين الموديلات فالتوزيع مباشر على الموديلات المفتوحة
+  const wt = r => (r.q*r.p)||r.q;
+  const elig = (t,hourlyOnly) => { const gs=G.filter(g=>(!hourlyOnly||st.groups[g].hourly) && hc(g,t)>0); return M.filter(r=>gs.includes(r.g) && open(r,t,true)); };
   const dayW={}; st.workers.forEach(w=>{ const rt=num(w.rate)||0; days.forEach(d=>{ const v=String((w.hours||{})[d]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v); if(n!==null) dayW[d]=(dayW[d]||0)+n*rt; }); });
   if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
   winDays.forEach(t=>{ const W=dayW[dnum(t)]||0; if(!W) return; const Wm=(MWD>0&&dw(t)>0)?MWD*dw(t):0;
-    const el=G.filter(g=>st.groups[g].hourly && hc(g,t)>0 && M.some(r=>r.g===g && open(r,t,true)));
-    if(!el.length){ UNAL+=W; return; }
-    const sh=W/el.length;
-    el.forEach(g=>{ const op=M.filter(r=>r.g===g && open(r,t,true)), tq=op.reduce((s,r)=>s+r.q,0); op.forEach(r=>{ r.wages=(r.wages||0)+sh*r.q/tq; r.wagesM=(r.wagesM||0)+(Wm/el.length)*r.q/tq; }); });
+    const op=elig(t,true);
+    if(!op.length){ UNAL+=W; return; }
+    const tw=op.reduce((s,r)=>s+wt(r),0);
+    op.forEach(r=>{ const f=wt(r)/tw; r.wages=(r.wages||0)+W*f; r.wagesM=(r.wagesM||0)+Wm*f; });
   });
   const RATE_W=0;
   const YM=Y*12+Mo, cyOf=r=>{ const c=(st.models[r.i]||{}).carry; return c&&YM>c.ym?c:null; };
@@ -766,10 +769,10 @@ function compute(st){
   const NGc=G.filter(g=>AVg[g]>0).length; let OHUN=0;
   M.forEach(r=>{ r.ohAcc=0; });
   rng(mS,Math.min(TODAY,mE)).forEach(t=>{ const dd=dw(t)*TC/WDm; if(!(dd>0)) return;
-    const el=G.filter(g=>hc(g,t)>0 && M.some(r=>r.g===g && open(r,t,true)));
-    if(!el.length){ OHUN+=dd; return; }
-    const sh=dd/el.length;
-    el.forEach(g=>{ const op=M.filter(r=>r.g===g && open(r,t,true)), tq=op.reduce((s,r)=>s+r.q,0); op.forEach(r=>{ r.ohAcc+=sh*r.q/tq; }); });
+    const op=elig(t,false);
+    if(!op.length){ OHUN+=dd; return; }
+    const tw=op.reduce((s,r)=>s+wt(r),0);
+    op.forEach(r=>{ r.ohAcc+=dd*wt(r)/tw; });
   });
   const ohG={}; G.forEach(g=>{ const L=M.filter(r=>r.g===g), w=L.reduce((s,r)=>s+r.wdv,0); ohG[g]= w>0 ? L.reduce((s,r)=>s+r.ohAcc,0)/w : 0; });
   const gw=Object.keys(GV).reduce((s,g)=>s+GV[g].wd,0), ohA=gw>0?Object.keys(GV).reduce((s,g)=>s+ohG[g]*GV[g].wd,0)/gw:0;
@@ -1381,7 +1384,7 @@ function p2(R){
     L.forEach((r,k)=>{ const gt=r.fin?"":"≥ "; b+=`<tr><td class="l">${k===0?`<b>G${g} – ${esc(GN(g))}</b>`:""}</td><td class="l">${esc(r.m)}</td><td>${r.fin?"منتهٍ ✔":"جارٍ"}</td><td>${fa(r.q)}</td><td>${fa(r.p,2)}</td><td><b>${(!r.fin&&r.hourly?"≥ ":"")+fa(r.real,2)}</b></td><td>${gt+fa(r.oh,2)}</td><td><b>${gt+fa(r.full,2)}</b></td><td>${fa(r.q*r.p)}</td><td></td></tr>`; });
     b+=`<tr class="tot"><td class="l" colspan="3">مجموع G${g} – ${esc(GN(g))}</td><td>${fa(L.reduce((s,r)=>s+r.q,0))}</td><td></td><td></td><td></td><td></td><td>${fa(tv)}</td><td><b>${perf}</b></td></tr>`; });
   b+=`<tr class="g"><td colspan="8">المجموع العام (${M.length} موديلاً)</td><td colspan="2">${fa(TV)} درهم</td></tr></table>
-  <div class="small">التكلفة الكاملة = الثمن + حصة الأجور (عمال الساعات والأجور الشهرية) + المصاريف الثابتة (${fa(R.TC)} د/شهر، موزعة يومياً بالتساوي على المجموعات الموجودة)؛ الثمن الفعلي = الثمن + الأجور فقط. ≥ للجارية (حتى ${dm(R.TODAY)}).</div>
+  <div class="small">التكلفة الكاملة = الثمن + حصة الأجور (عمال الساعات والأجور الشهرية) + المصاريف الثابتة (${fa(R.TC)} د/شهر، موزعة يومياً على الموديلات المفتوحة بنسبة القيمة (الكمية × الثمن))؛ الثمن الفعلي = الثمن + الأجور فقط. ≥ للجارية (حتى ${dm(R.TODAY)}).</div>
   <h3>2. العمال (الساعات والأجور الشهرية)</h3><table><tr><th>العامل</th><th>ثمن الساعة (درهم)</th><th>عدد الساعات</th><th>المجموع (درهم)</th></tr>`;
   R.WK.forEach(x=>{ b+=`<tr><td class="l"><b>${esc(x.n)}</b></td><td>${x.rate===null?"؟":fa(x.rate)}</td><td>${fa(x.h,1)}</td><td><b>${fa(x.brut)}</b></td></tr>`; });
   (R.MWL||[]).forEach(x=>{ b+=`<tr><td class="l"><b>${esc(x.n)}</b> <small>(أجر شهري ${fa(x.amt)})</small></td><td>—</td><td>—</td><td><b>${fa(x.acc)}</b></td></tr>`; });
@@ -1429,7 +1432,7 @@ function p4(R){
   <h3>قيمة اليوم/عامل بعد المصاريف (الموديلات المنتهية)</h3><table><tr><th>المجموعة</th><th>قيمة اليوم/عامل</th><th>حصة المصاريف/يوم×عامل</th><th>الباقي</th></tr>`;
   R.okg.slice().sort((a,c)=>R.rv[a]-R.rv[c]).forEach(g=>{ const v=R.GV[g].vj; b+=`<tr><td class="l">G${g} – ${esc(GN(g))}</td><td>${fa(v,1)}</td><td>${fa(R.ohG[g],1)}</td><td><b>${fa(v-R.ohG[g],1)}</b></td></tr>`; });
   if(R.TW) b+=`<tr class="tot"><td class="l">المعدل (المنتهية)</td><td>${fa(R.TM/R.TW,1)}</td><td>${fa(R.ohA,1)}</td><td>${fa(R.TM/R.TW-R.ohA,1)}</td></tr>`;
-  b+=`</table><div class="box"><b>كيف حُسب:</b><ul><li>المصاريف ${fa(R.TC)} ÷ أيام العمل ${fa(R.WDm,1)} = مصاريف اليوم (الأحد 0 والسبت نصف). تُقسم كل يوم بالتساوي على المجموعات الموجودة ذلك اليوم (واحدة أو اثنتان أو عشر)، ثم على موديلاتها المفتوحة بنسبة الكمية. «د لكل يوم×عامل» في هذا الجدول = المصاريف المحمّلة على المجموعة ÷ يوم×عامل فيها.</li><li>الأجور الشهرية (إن وُجدت) تُقسَّم على أيام العمل وتدخل في أجور اليوم مع عمال الساعات.</li><li>أجور عمال الساعات: أجور كل يوم تُقسَّم بالتساوي على المجموعات العاملة ذلك اليوم، ثم على موديلاتها المفتوحة بنسبة الكمية. الحساب من أول الشهر.</li><li>«الباقي» = قيمة اليوم/عامل − حصة المصاريف، ولا يشمل أجور عمال الساعات (${fa(R.WAGES)} درهم) فهي في الثمن الفعلي للقطعة.</li></ul></div>
+  b+=`</table><div class="box"><b>كيف حُسب:</b><ul><li>المصاريف ${fa(R.TC)} ÷ أيام العمل ${fa(R.WDm,1)} = مصاريف اليوم (الأحد 0 والسبت نصف). تُوزَّع كل يوم مباشرة على الموديلات المفتوحة في المجموعات العاملة ذلك اليوم بنسبة قيمتها (الكمية × الثمن)، لأن العمال يتنقلون بين الموديلات. «د لكل يوم×عامل» في هذا الجدول = المصاريف المحمّلة على المجموعة ÷ يوم×عامل فيها.</li><li>الأجور الشهرية (إن وُجدت) تُقسَّم على أيام العمل وتدخل في أجور اليوم مع عمال الساعات.</li><li>أجور عمال الساعات: أجور كل يوم تُوزَّع مباشرة على الموديلات المفتوحة في المجموعات العاملة ذلك اليوم بنسبة قيمتها (الكمية × الثمن). الحساب من أول الشهر.</li><li>«الباقي» = قيمة اليوم/عامل − حصة المصاريف، ولا يشمل أجور عمال الساعات (${fa(R.WAGES)} درهم) فهي في الثمن الفعلي للقطعة.</li></ul></div>
   <h3>الربح أو الخسارة لكل موديل (ثمن البيع − التكلفة الكاملة)</h3><table><tr><th>الموديل</th><th>الحالة</th><th>الكمية</th><th>ثمن البيع</th><th>التكلفة الكاملة</th><th>الربح/قطعة</th><th>النسبة</th><th>الربح الكلي</th></tr>`;
   const sold=r=>r.sp!==null;
   G.forEach(g=>{ const L=M.filter(r=>r.g===g); if(!L.length) return; const S=L.filter(sold), tp=S.reduce((s,r)=>s+r.pf*r.q,0), ts=S.reduce((s,r)=>s+r.sp*r.q,0);
