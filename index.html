@@ -909,6 +909,7 @@ function vMenu(){
   const S=R.M.filter(r=>r.sp!==null), ts=S.reduce((s,r)=>s+r.sp*r.q,0), res=ts-(R.TC+R.WAGES+R.TM+R.MoOn);
   const cards=[["today","📅","اليوم",(nr?fa(nr)+" عمال بلا ساعات":"ساعات اليوم مكتملة")+" · "+dm(R.TODAY)],
     ["models","📋","الطلبيات",fa(pend)+" قيد التنفيذ"+(stuck?" · "+fa(stuck)+" عالقة":"")],
+    ["forecast","🔮","توقع",fa(pend)+" طلبية · تاريخ النهاية والتقدم"],
     ["home","📊","اللوحة","النتيجة: "+(res<0?"خسارة ":"ربح ")+fa(Math.abs(res))+" د"],
     ["invoice","💰","الفوترة",((st.invoices||[]).length?fa(st.invoices.length)+" فاتورة · ":"")+"ما أقبضه مقابل ما أدفعه"],
     ["report","📄","التقارير","شامل · مقارنة · يومي · فيشات"],
@@ -924,8 +925,8 @@ function vQuick(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), ts=S.reduc
   view.oninput=null; view.onchange=null; view.onclick=e=>{ const i=e.target.id, iso=new Date(R.TODAY).toISOString().slice(0,10), fm="تقرير_نهاية_الشهر_"+st.year+"-"+st.month+".pdf", fd="تقرير_اليوم_"+iso+".pdf";
     if(i==="dypdf") exportPdf(e.target,"#dypg .rp","p",fd); if(i==="dyshare") sharePdf(e.target,"#dypg .rp","p",fd); if(i==="mepdf") exportPdf(e.target,"#mepg .rp","p",fm); if(i==="meshare") sharePdf(e.target,"#mepg .rp","p",fm); };
 }
-const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],invoice:["invoice"],report:["report","profit","cmp","quick","forms"],costs:["costs"]};
-const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",report:"التقرير الشامل",profit:"جدول الأرباح",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
+const SEC={today:["today","workers","groups"],models:["models","track","forecast"],home:["home"],invoice:["invoice"],report:["report","profit","cmp","quick","forms"],costs:["costs"]};
+const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",forecast:"توقع",report:"التقرير الشامل",profit:"جدول الأرباح",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
 const secOf=t=>Object.keys(SEC).find(k=>SEC[k].includes(t))||t;
 function subNav(k){ const L=SEC[secOf(k)]||[]; if(L.length<2) return ""; return `<div class="stg noprint" style="margin:0 0 10px">${L.map(x=>`<button class="sc ${x===k?"c":""}" data-sub="${x}">${SUBL[x]}</button>`).join("")}</div>`; }
 function decor(k){ if(tab!==k) return; view.insertAdjacentHTML("afterbegin",subNav(k)+(k==="today"?`<div id="todoWrap">${todoCard(compute(st))}</div>`:"")); }
@@ -1018,7 +1019,7 @@ function vInvoice(){
     if(d.icx){ if(iArm!==d.icx){ iArm=d.icx; setTimeout(()=>{ if(iArm===d.icx){ iArm=null; if(tab==="invoice") vInvoice(); } },4000); return vInvoice(); }
       iArm=null; st.invoices=(st.invoices||[]).filter(x=>x.id!==d.icx); st.models.forEach(m=>{ if(m.inv===d.icx) delete m.inv; }); save(); return vInvoice(); } };
 }
-function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit,invoice:vInvoice})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
+function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,forecast:vForecast,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit,invoice:vInvoice})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
 { const bh=document.getElementById("brandHome"); if(bh) bh.onclick=()=>go("menu"); }
 
@@ -1527,6 +1528,34 @@ function trkPage(R,all){
   <table><tr><th>الموديل</th><th>المجموعة</th><th>الكمية</th>${STAGES.map(n=>`<th>${n}</th>`).join("")}<th>أيام</th></tr>${rows.map(({r,si})=>`<tr><td>${esc(r.m)}</td><td>G${r.g} ${esc(GN(r.g))}</td><td>${fa(r.q)}</td>${STAGES.map((n,j)=>j<si.k?'<td class="pd">✓</td>':j===si.k?`<td class="${si.days!==null&&si.days>thr?"pw":"pc"}">${fa(pcs(r))}</td>`:"<td></td>").join("")}<td class="${si.days!==null&&si.days>thr?"pwt":""}">${si.days!==null?fa(si.days):"—"}</td></tr>`).join("")}</table>
   <div class="note">✓ = مرّ بالمرحلة · الرقم = عدد القطع في المرحلة الحالية · الأحمر = مرّت أكثر من ${fa(thr)} أيام في نفس المرحلة.</div>
   ${stuck.length?`<div class="sum"><b>تنبيه – موديلات عالقة:</b><ul>${stuck.map(({r,si})=>`<li>${esc(r.m)} (<bdi dir="ltr">G${r.g}</bdi>): ${fa(pcs(r))} قطعة · مرّت ${fa(si.days)} أيام في مرحلة ${STAGES[si.k]}</li>`).join("")}</ul></div>`:'<div class="sum"><b>لا موديلات عالقة.</b></div>'}</div>`; }
+
+/* ---------- قسم التوقع ---------- */
+let fcSel="", fcSt="open";
+function vForecast(){
+  const R=compute(st), TD=R.TODAY, gs=R.G.slice().sort((a,b)=>a-b);
+  if(fcSel!=="*"&&!gs.includes(fcSel)) fcSel=(gs.find(g=>R.M.some(r=>r.g===g&&!r.fin))||gs[0]||"");
+  const wsum=(a,b)=>a>b?0:rng(a,b).reduce((s,t)=>s+dw(t),0);
+  const chips=`<button class="sc ${fcSel==="*"?"c":""}" data-fg="*">كل المجموعات</button>`+gs.map(g=>{ const n=R.M.filter(r=>r.g===g&&!r.fin).length; return `<button class="sc ${g===fcSel?"c":""}" data-fg="${g}">م${g}${GN(g)?" · "+esc(GN(g)):""}${n?` (${n})`:""}</button>`; }).join("");
+  const L=R.M.filter(r=>(fcSel==="*"||r.g===fcSel)&&(fcSt==="all"||!r.fin)).sort((x,y)=>(x.fin-y.fin)||(x.a-y.a)), op=L.filter(r=>!r.fin);
+  const av=fcSel==="*"?R.AV:(R.AVg[fcSel]||0), tq=op.reduce((s,r)=>s+r.q,0), tm=op.reduce((s,r)=>s+r.q*r.p,0);
+  const lastEnd=op.reduce((m,r)=>{ const e=r.plan||(r.fc&&r.fc.end); return e&&e>m?e:m; },0);
+  const card=r=>{
+    const end=r.fin?r.b:(r.plan||(r.fc&&r.fc.end)||null), stop=Math.min(TD,end||TD);
+    const cal=r.a<=stop?Math.round((stop-r.a)/DAY)+1:0, wk=wsum(r.a,stop);
+    const rem=(!r.fin&&end&&end>TD)?wsum(TD+DAY,end):0;
+    const tot=wk+rem, tp=r.fin?100:(tot>0?Math.min(100,100*wk/tot):0), pp=r.fin?100:Math.round(100*(r.prog||0));
+    const late=!r.fin&&end&&end<TD;
+    const pf=r.sp!==null?` · الربح المتوقع <b class="${r.pf<0?"bad":"ok"}">${fa(r.pf,2)} د/قطعة</b> (${fa(r.pf*r.q)} د)`:"";
+    return `<div class="card"><div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(r.m)}${fcSel==="*"?` <small class="note">· م${r.g}${GN(r.g)?" "+esc(GN(r.g)):""}</small>`:""}</b><span class="note">${r.fin?"منتهية":(late?"متأخرة عن التوقع":"جارية")}</span></div>
+    <div class="kts" style="grid-template-columns:repeat(3,1fr)"><div class="kt"><b>${fa(r.q)}</b><small>العدد</small></div><div class="kt"><b>${fa(r.p,2)} د</b><small>ثمن المجموعة</small></div><div class="kt"><b>${fa(r.q*r.p)} د</b><small>المبلغ</small></div></div>
+    <div class="note">البداية <b>${dm(r.a)}</b> · ${r.fin?"النهاية":"النهاية المتوقعة"} <b>${end?dm(end):"—"}</b>${r.plan&&!r.fin?" (مخطط)":""}</div>
+    <div class="note">مرّ <b>${fa(cal)}</b> يوم (<b>${fa(wk,1)}</b> يوم عمل)${!r.fin&&end?` · المتبقي <b>${fa(rem,1)}</b> يوم عمل`:""}</div>
+    <div class="note" style="margin-top:6px">الزمن ${fa(Math.round(tp))}%</div><div class="pbar"><i style="width:${tp}%"></i></div>
+    <div class="note">الإنجاز المتوقع ${fa(pp)}%${!r.fin&&r.done?` · المنجز ${fa(r.done)} قطعة`:(!r.fin?` · ≈ ${fa(Math.round(r.q*pp/100))} قطعة`:"")}</div><div class="pbar"><i class="${late&&pp<100?"bad":""}" style="width:${pp}%"></i></div>
+    <div class="note">${r.fin||r.sp===null?"":"التكلفة المتوقعة "+fa(r.full,2)+" د/قطعة"}${pf}</div></div>`; };
+  view.innerHTML=`<div class="stg noprint" style="margin:0 0 6px">${chips}</div><div class="stg noprint" style="margin:0 0 10px"><button class="sc ${fcSt==="open"?"c":""}" data-fs="open">غير المنتهية فقط</button><button class="sc ${fcSt==="all"?"c":""}" data-fs="all">الكل (مع المنتهية)</button></div>`+(L.length?`<div class="kts"><div class="kt"><b>${fa(op.length)}</b><small>طلبيات جارية</small></div><div class="kt"><b>${fa(tq)}</b><small>قطعة</small></div><div class="kt"><b>${fa(tm)} د</b><small>مبلغ المجموعة</small></div><div class="kt"><b>${fa(av,1)}</b><small>متوسط العمال</small></div></div>${lastEnd?`<div class="note">آخر طلبية متوقع أن تنتهي: <b>${dm(lastEnd)}</b></div>`:""}`+L.map(card).join(""):'<div class="note">لا توجد طلبيات لهذه المجموعة.</div>')+`<div class="note" style="margin-top:8px">التاريخ المتوقع يعتمد على عدد العمال × الهدف اليومي (${fa(st.target)}) وترتيب الطلبيات في المجموعة؛ ويصحَّح بإدخال "المنجز" أو "التاريخ المخطط".</div>`;
+  view.oninput=null; view.onchange=null; view.onclick=e=>{ const b=e.target.closest("[data-fg]"); if(b){ fcSel=b.dataset.fg; vForecast(); } const s=e.target.closest("[data-fs]"); if(s){ fcSt=s.dataset.fs; vForecast(); } };
+}
 function vTrack(){ const R=compute(st), all=allM(R).map(r=>({r,si:stageInfo(r,R)})), cnt=k=>all.filter(x=>x.si.k===k).length,
     shown=(trkF==="all"?all:all.filter(x=>x.si.k===trkF)).sort((a,b)=>(b.si.days||0)-(a.si.days||0)||a.si.k-b.si.k);
   const fb=(v,l,n)=>`<button class="sc ${trkF===v?"c":""}" data-tf="${v}">${l} (${fa(n)})</button>`;
@@ -1659,6 +1688,7 @@ addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab &
 { const f=vGroups; vGroups=function(){ f(); decor("groups"); }; }
 { const f=vModels; vModels=function(){ f(); decor("models"); }; }
 { const f=vTrack; vTrack=function(){ f(); decor("track"); }; }
+{ const f=vForecast; vForecast=function(){ f(); decor("forecast"); }; }
 { const f=vReport; vReport=function(){ f(); decor("report"); }; }
 { const f=vCompare; vCompare=function(){ f(); decor("cmp"); }; }
 { const f=vQuick; vQuick=function(){ f(); decor("quick"); }; }
