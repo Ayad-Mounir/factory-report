@@ -175,7 +175,7 @@ table.tm tr.tt td{background:var(--bg);font-weight:700}
 .esheet{background:var(--card);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px))}
 .esheet .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .esheet details.span2{grid-column:1/-1}
-</style></head><body><header class="top"><div class="brand" id="brandHome" style="cursor:pointer">التقرير الشامل <small id="monthLbl"></small></div><nav id="tabs"><button data-t="menu">☰ القائمة</button><button data-t="today">اليوم</button><button data-t="models">الطلبيات</button><button data-t="home">اللوحة</button><button data-t="report">التقارير</button><button data-t="costs">الإعدادات</button></nav></header>
+</style></head><body><header class="top"><div class="brand" id="brandHome" style="cursor:pointer">التقرير الشامل <small id="monthLbl"></small></div><nav id="tabs"><button data-t="menu">☰ القائمة</button><button data-t="today">اليوم</button><button data-t="models">الطلبيات</button><button data-t="home">اللوحة</button><button data-t="invoice">الفوترة</button><button data-t="report">التقارير</button><button data-t="costs">الإعدادات</button></nav></header>
 <main id="view"></main><script>/*!
  * html2canvas 1.4.1 <https://html2canvas.hertzen.com>
  * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
@@ -680,7 +680,8 @@ function compute(st){
     el.forEach(g=>{ const op=M.filter(r=>r.g===g && open(r,t,true)), tq=op.reduce((s,r)=>s+r.q,0); op.forEach(r=>{ r.wages=(r.wages||0)+sh*r.q/tq; r.wagesM=(r.wagesM||0)+(Wm/el.length)*r.q/tq; }); });
   });
   const RATE_W=0;
-  M.forEach(r=>{ r.wages=r.wages||0; r.add=r.wages/r.q; r.real=r.p+r.add; r.hourly=st.groups[r.g].hourly; });
+  const YM=Y*12+Mo, cyOf=r=>{ const c=(st.models[r.i]||{}).carry; return c&&YM>c.ym?c:null; };
+  M.forEach(r=>{ r.wages=r.wages||0; const cy=cyOf(r); if(cy){ r.wages+=cy.w||0; r.wagesM=(r.wagesM||0)+(cy.wm||0); } r.add=r.wages/r.q; r.real=r.p+r.add; r.hourly=st.groups[r.g].hourly; });
 
   // ---- worker-days of each model (month) and effective worker-days (finished)
   M.forEach(r=>{
@@ -771,7 +772,7 @@ function compute(st){
   });
   const ohG={}; G.forEach(g=>{ const L=M.filter(r=>r.g===g), w=L.reduce((s,r)=>s+r.wdv,0); ohG[g]= w>0 ? L.reduce((s,r)=>s+r.ohAcc,0)/w : 0; });
   const gw=Object.keys(GV).reduce((s,g)=>s+GV[g].wd,0), ohA=gw>0?Object.keys(GV).reduce((s,g)=>s+ohG[g]*GV[g].wd,0)/gw:0;
-  M.forEach(r=>{ r.oh=r.ohAcc/r.q; r.full=r.real+r.oh; if(r.sp!==null){ r.pf=r.sp-r.full; r.pc=100*r.pf/r.sp; } });
+  M.forEach(r=>{ const cy=cyOf(r); if(cy) r.ohAcc+=cy.o||0; r.oh=r.ohAcc/r.q; r.full=r.real+r.oh; if(r.sp!==null){ r.pf=r.sp-r.full; r.pc=100*r.pf/r.sp; } });
   // ---- توقع الربح للموديلات الجارية/التي لم تبدأ: المتحقق حتى اليوم + المتبقي بمعدل المجموعة التاريخي
   const hr=L=>{ const f=L.filter(x=>x.fin&&x.p>0), b=f.reduce((s,x)=>s+x.p*x.q,0); return b>0?f.reduce((s,x)=>s+(x.add+x.oh)*x.q,0)/b:null; };
   const hAll=hr(M);
@@ -819,7 +820,7 @@ const mLabel=()=>`${MONTHS[st.month-1]} ${st.year}`;
 const isSun=d=>new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()===0;
 const wdl=d=>"DLMMJVS"[new Date(Date.UTC(st.year,st.month-1,d)).getUTCDay()];
 let tab=(location.hash||"#menu").slice(1);
-if(!["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit"].includes(tab)) tab="menu";
+if(!["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit","invoice"].includes(tab)) tab="menu";
 
 
 /* ---------- المقارنة بين الأشهر ---------- */
@@ -904,6 +905,7 @@ function vMenu(){
   const cards=[["today","📅","اليوم",(nr?fa(nr)+" عمال بلا ساعات":"ساعات اليوم مكتملة")+" · "+dm(R.TODAY)],
     ["models","📋","الطلبيات",fa(pend)+" قيد التنفيذ"+(stuck?" · "+fa(stuck)+" عالقة":"")],
     ["home","📊","اللوحة","النتيجة: "+(res<0?"خسارة ":"ربح ")+fa(Math.abs(res))+" د"],
+    ["invoice","💰","الفوترة",((st.invoices||[]).length?fa(st.invoices.length)+" فاتورة · ":"")+"ما أقبضه مقابل ما أدفعه"],
     ["report","📄","التقارير","شامل · مقارنة · يومي · فيشات"],
     ["costs","⚙️","الإعدادات","مصاريف · أجور شهرية · نسخ احتياطي"]];
   view.innerHTML=`<div class="mgrid">${cards.map(c=>`<button class="mtile" data-go="${c[0]}"><span class="mi">${c[1]}</span><b>${c[2]}</b><small>${c[3]}</small></button>`).join("")}</div><div class="note" style="text-align:center;margin-top:10px">${bkLine()}</div>
@@ -916,7 +918,7 @@ function vQuick(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), ts=S.reduc
   view.oninput=null; view.onchange=null; view.onclick=e=>{ const i=e.target.id, iso=new Date(R.TODAY).toISOString().slice(0,10), fm="تقرير_نهاية_الشهر_"+st.year+"-"+st.month+".pdf", fd="تقرير_اليوم_"+iso+".pdf";
     if(i==="dypdf") exportPdf(e.target,"#dypg .rp","p",fd); if(i==="dyshare") sharePdf(e.target,"#dypg .rp","p",fd); if(i==="mepdf") exportPdf(e.target,"#mepg .rp","p",fm); if(i==="meshare") sharePdf(e.target,"#mepg .rp","p",fm); };
 }
-const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],report:["report","profit","cmp","quick","forms"],costs:["costs"]};
+const SEC={today:["today","workers","groups"],models:["models","track"],home:["home"],invoice:["invoice"],report:["report","profit","cmp","quick","forms"],costs:["costs"]};
 const SUBL={today:"تسجيل اليوم",workers:"جدول العمال",groups:"المجموعات",models:"القائمة",track:"المراحل",report:"التقرير الشامل",profit:"جدول الأرباح",cmp:"المقارنة",quick:"تقارير سريعة",forms:"الفيشات"};
 const secOf=t=>Object.keys(SEC).find(k=>SEC[k].includes(t))||t;
 function subNav(k){ const L=SEC[secOf(k)]||[]; if(L.length<2) return ""; return `<div class="stg noprint" style="margin:0 0 10px">${L.map(x=>`<button class="sc ${x===k?"c":""}" data-sub="${x}">${SUBL[x]}</button>`).join("")}</div>`; }
@@ -955,7 +957,62 @@ function vProfit(){
   view.onchange=e=>{ const d=e.target.dataset; if(d.bill!==undefined){ const m=st.models[+d.bill]; if(m){ m.bill=e.target.checked; save(); const y=window.scrollY; vProfit(); window.scrollTo(0,y); } } };
   view.onclick=e=>{ const d=e.target.dataset; if(d.pf){ pF=d.pf; return vProfit(); } if(e.target.id==="ppdf") exportPdf(e.target,"#ppg .rp","p","جدول_الأرباح_"+pF+".pdf"); if(e.target.id==="pshare") sharePdf(e.target,"#ppg .rp","p","جدول_الأرباح_"+pF+".pdf"); };
 }
-function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
+
+/* ---------- الفوترة ---------- */
+let iG="all", iSel=new Set(), iCost={wh:true,wm:true,fx:true}, iArm=null;
+function invCosts(R){
+  const mEnd=Math.min(R.TODAY,R.mS+(R.nD-1)*DAY), el=mEnd>=R.mS?rng(R.mS,mEnd).reduce((s,t)=>s+dw(t),0):0, key=st.year+"-"+st.month;
+  const tot={wh:R.WAGES-(R.MW||0),wm:R.MW||0,fx:R.WDm>0?R.TC*Math.min(1,el/R.WDm):0}, done={wh:0,wm:0,fx:0};
+  (st.invoices||[]).filter(v=>v.key===key).forEach(v=>{ ["wh","wm","fx"].forEach(k=>{ done[k]+=v[k]||0; }); });
+  return {tot,done,rem:{wh:Math.max(0,tot.wh-done.wh),wm:Math.max(0,tot.wm-done.wm),fx:Math.max(0,tot.fx-done.fx)}};
+}
+function invRows(){ st.models.forEach((m,i)=>{ if(!m.uid) m.uid="m"+Date.now().toString(36)+i; });
+  return st.models.map((m,i)=>({m,i,q:num(m.qty)||0,p:num(m.price),s:num(m.sale)})).filter(x=>x.m.g&&x.q&&x.p!==null&&x.s!==null&&!x.m.inv).map(x=>({...x,gp:x.q*x.p,sale:x.q*x.s,fin:!!x.m.end})); }
+function invPage(R,v){
+  const f=n=>fa(n), row=(l,x,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${f(x)}</td></tr>`;
+  return `<div class="rp"><h1>كشف الفوترة – <bdi dir="ltr">${v.date}</bdi></h1><div class="sub">${v.label||""} &nbsp;|&nbsp; المبالغ بالدرهم</div>
+  <table><tr><th>المجموعة</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th></tr>${v.orders.map(o=>`<tr><td>G${esc(o.g)}</td><td class="l">${esc(o.name)}</td><td>${f(o.q)}</td><td>${f(o.gp)}</td><td>${f(o.sale)}</td></tr>`).join("")}<tr class="tot"><td colspan="3" class="l">المجموع (${v.orders.length})</td><td>${f(v.gp)}</td><td>${f(v.sale)}</td></tr></table>
+  <h3>ما قبضته وما دفعته</h3><table style="width:70%">${row("ما سأقبضه من العميل",v.sale)}${row("أداء المجموعات",v.gp)}${row("عمال الساعات",v.wh)}${row("عمال الشهر",v.wm)}${row("المصاريف الثابتة",v.fx)}${row("مجموع ما دفعته",v.gp+v.wh+v.wm+v.fx,1)}${row((v.res<0?"خسارة":"ربح")+(v.sale?" ("+fa(100*v.res/v.sale,1)+"%)":""),v.res,1)}</table></div>`;
+}
+function vInvoice(){
+  const R=compute(st), C=invCosts(R), rowsAll=invRows(), G=[...new Set(rowsAll.map(x=>String(x.m.g)))].sort((a,b)=>a-b);
+  if(iG!=="all"&&!G.includes(iG)) iG="all";
+  const rows=rowsAll.filter(x=>iG==="all"||String(x.m.g)===iG).sort((a,b)=>(b.fin-a.fin)||a.i-b.i);
+  [...iSel].forEach(u=>{ if(!rowsAll.some(x=>x.m.uid===u)) iSel.delete(u); });
+  const sel=rowsAll.filter(x=>iSel.has(x.m.uid)), sale=sel.reduce((s,x)=>s+x.sale,0), gp=sel.reduce((s,x)=>s+x.gp,0);
+  const wh=iCost.wh?C.rem.wh:0, wm=iCost.wm?C.rem.wm:0, fx=iCost.fx?C.rem.fx:0, paid=gp+wh+wm+fx, res=sale-paid;
+  const draft={date:String(new Date(R.TODAY).getUTCDate()).padStart(2,"0")+"/"+String(new Date(R.TODAY).getUTCMonth()+1).padStart(2,"0")+"/"+new Date(R.TODAY).getUTCFullYear(),label:"مسودة",orders:sel.map(x=>({g:x.m.g,name:x.m.name,q:x.q,gp:x.gp,sale:x.sale,uid:x.m.uid})),sale,gp,wh,wm,fx,res};
+  const chip=(v,l)=>`<button class="sc ${iG===v?"c":""}" data-ig="${v}">${l}</button>`;
+  const cb=(k,l,tot,rem,done)=>`<label class="wn" style="padding:6px 0;gap:8px"><span><input type="checkbox" data-ic="${k}" ${iCost[k]?"checked":""}> ${l}${done>0?` <small>(محتسب سابقاً ${fa(done)})</small>`:""}</span><b>${fa(rem)} د</b></label>`;
+  const hist=(st.invoices||[]).slice().reverse().map(v=>`<div class="orow"><div class="oh"><b>${esc(v.date)} · ${fa(v.orders.length)} طلبية</b><span class="bdg ${v.res<0?"bad":"ok"}">${v.res<0?"خسارة":"ربح"} ${fa(Math.abs(v.res))}</span></div><div class="od"><span>قبض ${fa(v.sale)}</span><span>دفع ${fa(v.gp+v.wh+v.wm+v.fx)}</span></div><div class="bar"><button class="btn alt" data-ipdf="${v.id}">PDF</button><button class="btn del" data-icx="${v.id}">${iArm===v.id?"اضغط للتأكيد":"إلغاء الفاتورة"}</button></div></div>`).join("");
+  view.innerHTML=`<div class="note">١) حدّد طلبيات المجموعة التي تطلب أداءها من العميل. الطلبية المفوترة لا تظهر في فاتورة الشهر المقبل.</div>
+  <div class="stg" style="margin:0 0 8px">${chip("all","كل المجموعات")}${G.map(g=>chip(g,"G"+g)).join("")}</div>
+  <div class="bar"><button class="btn alt" data-iall="1">تحديد المنتهية</button><button class="btn alt" data-inone="1">إلغاء التحديد</button></div>
+  <div class="scroll"><table class="g"><tr><th></th><th>G</th><th>الموديل</th><th>الكمية</th><th>أداء المجموعة</th><th>ثمن البيع</th><th>الحالة</th></tr>${rows.map(x=>`<tr><td><input type="checkbox" data-isel="${x.m.uid}" ${iSel.has(x.m.uid)?"checked":""}></td><td>G${esc(x.m.g)}</td><td class="nm">${esc(x.m.name)}</td><td>${fa(x.q)}</td><td>${fa(x.gp)}</td><td>${fa(x.sale)}</td><td>${x.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("")||'<tr><td colspan="7">لا طلبيات غير مفوترة.</td></tr>'}</table></div>
+  <div class="note" style="margin-top:8px">٢) ما ستدفعه في هذه الفاتورة (حتى ${dm(R.TODAY)})</div>
+  <div class="card">${cb("wh","عمال الساعات",C.tot.wh,C.rem.wh,C.done.wh)}${cb("wm","عمال الشهر",C.tot.wm,C.rem.wm,C.done.wm)}${cb("fx","المصاريف الثابتة",C.tot.fx,C.rem.fx,C.done.fx)}</div>
+  <div class="card"><b>الخلاصة (${fa(sel.length)} طلبية محددة)</b>
+  <div class="wn" style="padding:5px 0"><span>ما سأقبضه من العميل</span><b>${fa(sale)} د</b></div>
+  <div class="wn" style="padding:5px 0"><span>أداء المجموعات</span><b>${fa(gp)} د</b></div>
+  <div class="wn" style="padding:5px 0"><span>عمال الساعات + عمال الشهر + المصاريف الثابتة</span><b>${fa(wh+wm+fx)} د</b></div>
+  <div class="wn" style="padding:6px 0;border-top:2px solid var(--line);font-size:17px;margin-top:4px"><span>مجموع ما سأدفعه ${fa(paid)} د → ${res<0?"خسارة":"ربح"}</span><b class="${res<0?"neg":""}" style="${res<0?"":"color:var(--ok)"}">${fa(res)} د${sale?" ("+fa(100*res/sale,1)+"%)":""}</b></div></div>
+  <div class="bar"><button class="btn" id="iiss" ${sel.length?"":"disabled"}>${iArm==="iss"?"اضغط للتأكيد: إصدار الفاتورة":"إصدار الفاتورة"}</button>${pdfReady()?'<button class="btn alt" id="idpdf">PDF المسودة</button>':""}</div>
+  ${hist?`<h2>الفواتير السابقة</h2>${hist}`:""}<div id="ipg" style="display:none">${brand(R,invPage(R,draft))}</div>`;
+  view.oninput=null;
+  view.onchange=e=>{ const d=e.target.dataset, y=window.scrollY; if(d.isel){ e.target.checked?iSel.add(d.isel):iSel.delete(d.isel); vInvoice(); window.scrollTo(0,y); } if(d.ic){ iCost[d.ic]=e.target.checked; vInvoice(); window.scrollTo(0,y); } };
+  view.onclick=e=>{ const t=e.target, d=t.dataset; const y=window.scrollY;
+    if(d.ig){ iG=d.ig; return vInvoice(); }
+    if(d.iall){ rows.filter(x=>x.fin).forEach(x=>iSel.add(x.m.uid)); return vInvoice(); }
+    if(d.inone){ rows.forEach(x=>iSel.delete(x.m.uid)); return vInvoice(); }
+    if(t.id==="iiss"){ if(iArm!=="iss"){ iArm="iss"; setTimeout(()=>{ if(iArm==="iss"){ iArm=null; if(tab==="invoice") vInvoice(); } },4000); return vInvoice(); }
+      iArm=null; const id="inv"+Date.now().toString(36), v={...draft,id,label:"فاتورة",key:st.year+"-"+st.month,at:new Date().toISOString()}; st.invoices=st.invoices||[]; st.invoices.push(v);
+      sel.forEach(x=>{ st.models[x.i].inv=id; }); iSel.clear(); save(); return vInvoice(); }
+    if(t.id==="idpdf") return exportPdf(t,"#ipg .rp","p","كشف_الفوترة_مسودة.pdf");
+    if(d.ipdf){ const v=(st.invoices||[]).find(x=>x.id===d.ipdf); if(v){ document.getElementById("ipg").innerHTML=brand(R,invPage(R,v)); return exportPdf(t,"#ipg .rp","p","كشف_الفوترة_"+String(v.date).replace(/\//g,"-")+".pdf"); } }
+    if(d.icx){ if(iArm!==d.icx){ iArm=d.icx; setTimeout(()=>{ if(iArm===d.icx){ iArm=null; if(tab==="invoice") vInvoice(); } },4000); return vInvoice(); }
+      iArm=null; st.invoices=(st.invoices||[]).filter(x=>x.id!==d.icx); st.models.forEach(m=>{ if(m.inv===d.icx) delete m.inv; }); save(); return vInvoice(); } };
+}
+function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit,invoice:vInvoice})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
 { const bh=document.getElementById("brandHome"); if(bh) bh.onclick=()=>go("menu"); }
 
@@ -1068,8 +1125,9 @@ function vCosts(){
     save(); };
 
   function switchMonth(ny,nm){ st.arch=st.arch||{}; const ok=st.year+"-"+st.month, nk=ny+"-"+nm; if(ok===nk) return;
-    const R0=compute(st); allM(R0).forEach(r=>{ const m=st.models[r.i]; if(m&&(m.stage===undefined||m.stage==="")){ const si=stageInfo(r,R0); m.stage=si.k; if(si.k>=2&&si.k<=5&&!m.stageDate&&r.b) m.stageDate=new Date(r.b).toISOString().slice(0,10); } });
-    const delIdx=new Set(allM(R0).filter(r=>stageInfo(r,R0).k===DLV).map(r=>r.i));
+    const R0=compute(st); if(ny*12+nm>st.year*12+st.month){ const mEnd0=R0.mS+(R0.nD-1)*DAY; R0.M.forEach(r=>{ if(!r.fin||r.b>mEnd0){ const m=st.models[r.i]; if(m) m.carry={ym:st.year*12+st.month,w:r.wages||0,wm:r.wagesM||0,o:r.ohAcc||0}; } }); }
+    allM(R0).forEach(r=>{ const m=st.models[r.i]; if(m&&(m.stage===undefined||m.stage==="")){ const si=stageInfo(r,R0); m.stage=si.k; if(si.k>=2&&si.k<=5&&!m.stageDate&&r.b) m.stageDate=new Date(r.b).toISOString().slice(0,10); } });
+    const delIdx=new Set(allM(R0).filter(r=>stageInfo(r,R0).k===DLV&&(st.models[r.i]||{}).inv).map(r=>r.i));
     st.arch[ok]={w:JSON.parse(JSON.stringify(st.workers)),groups:JSON.parse(JSON.stringify(st.groups)),hours:st.workers.map(w=>({n:w.name,h:w.hours||{},a:w.advance})),heads:st.heads,charges:st.charges,monthly:JSON.parse(JSON.stringify(st.monthly||[])),models:(()=>{ const ix=new Set(delIdx); R0.M.forEach(r=>{ if(r.fin) ix.add(r.i); }); return JSON.parse(JSON.stringify(st.models.filter((m,i)=>ix.has(i)))); })()};
     st.models=st.models.filter((m,i)=>!delIdx.has(i));
     Object.keys(st.groups).forEach(g=>{ const hh=st.heads[g]||{}; const ds=Object.keys(hh).filter(d=>String(hh[d]).trim()!==""&&!isAbs(String(hh[d]).trim())).map(Number).sort((a,b)=>a-b); if(ds.length) st.groups[g].prev=num(hh[ds[ds.length-1]])||0; });
@@ -1589,7 +1647,7 @@ function vToday(){ const iso=tDate||st.today, [y,m,d]=iso.split("-").map(Number)
     else if(gr){ const o=st.heads[gr.dataset.g]=st.heads[gr.dataset.g]||{};
       if(b.dataset.s) o[d]=String(Math.max(0,(num(o[d])||0)+ +b.dataset.s)); else if(b.dataset.hv!==undefined) o[d]=b.dataset.hv; save(); vToday(); } }; }
 
-addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit"].includes(t)) go(t); });
+addEventListener("hashchange",()=>{ const t=location.hash.slice(1); if(t!==tab && ["menu","home","today","track","workers","groups","models","costs","forms","report","cmp","quick","profit","invoice"].includes(t)) go(t); });
 { const f=vToday; vToday=function(){ f(); decor("today"); }; }
 { const f=vWorkers; vWorkers=function(){ f(); decor("workers"); }; }
 { const f=vGroups; vGroups=function(){ f(); decor("groups"); }; }
