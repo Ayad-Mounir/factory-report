@@ -716,14 +716,24 @@ function compute(st){
     if(!(av>0)){ // موديل بدأ اليوم ولم تتجمع أيام عمل بعد: نستعمل آخر عدد عمال مسجَّل للمجموعة (أو عمال الشهر السابق)
       const hd=Object.keys(st.heads[g]||{}).filter(d=>String(st.heads[g][d]).trim()!=="").map(Number).sort((a,b)=>a-b);
       const lh=hd.length?hc(g,Date.UTC(Y,Mo-1,hd[hd.length-1])):0; av=lh>0?lh:(num(st.groups[g].prev)||0); }
-    const rate=av*st.target; let cm=0;
-    L.forEach(r=>{
-      cm += r.q*r.p;
-      if(rate<=0){ FC.set(r.i,{end:null,av,need:null}); return; }
-      const need=cm/rate; let c=0, t=a0, guard=0;
-      while(guard++<400){ c+=dw(t); if(c>=need-1e-9) break; t+=DAY; }
-      FC.set(r.i,{end:t,av,need});
-    });
+    const rate=av*st.target;
+    // محاكاة يومية من الغد: السعة اليومية = العمال × الهدف؛ تُصرف على الطلبيات حسب ترتيب البداية، ولا تدخل طلبية قبل تاريخ بدايتها؛ والمتبقي = (1 - الإنجاز) × المبلغ
+    // الإنجاز المقدَّر بلا "المنجز": نفس المحاكاة من بداية الشهر حتى اليوم بعدد العمال المسجَّل كل يوم (الأقدم أولاً)
+    const cons=new Map(); L.forEach(r=>cons.set(r.i,0));
+    rng(Math.max(a0,mS),Math.min(TODAY,mE)).forEach(t=>{ let cap=dw(t)*hc(g,t)*st.target; if(!(cap>0)) return;
+      L.forEach(r=>{ if(r.a>t||cap<=0) return; const base=r.q*r.p, u=Math.min(cap,base-cons.get(r.i)); if(u>0){ cons.set(r.i,cons.get(r.i)+u); cap-=u; } }); });
+    const rem=new Map(); L.forEach(r=>{ const base=r.q*r.p, pr=(r.done!==null&&r.done>0)?Math.min(1,r.done/r.q):(base>0?Math.min(1,cons.get(r.i)/base):0); r.psim=pr; rem.set(r.i,(1-pr)*base); });
+    if(rate<=0){ L.forEach(r=>FC.set(r.i,{end:null,av,need:null})); }
+    else {
+      L.forEach(r=>{ if(rem.get(r.i)<=1e-9) FC.set(r.i,{end:Math.max(TODAY,r.a),av,need:0}); });
+      let t=TODAY+DAY, guard=0;
+      while(guard++<800 && L.some(r=>!FC.has(r.i))){
+        let cap=dw(t)*rate;
+        if(cap>0) L.forEach(r=>{ if(FC.has(r.i)||r.a>t||cap<=0) return; const u=Math.min(cap,rem.get(r.i)); rem.set(r.i,rem.get(r.i)-u); cap-=u; if(rem.get(r.i)<=1e-9) FC.set(r.i,{end:t,av,need:null}); });
+        t+=DAY;
+      }
+      L.forEach(r=>{ if(!FC.has(r.i)) FC.set(r.i,{end:null,av,need:null}); });
+    }
     const joints={}; L.forEach(r=>{ if(r.joint){ const e=FC.get(r.i).end; if(e!==null) joints[r.joint]=Math.max(joints[r.joint]||0,e);} });
     L.forEach(r=>{ if(r.joint && joints[r.joint]) FC.get(r.i).end=joints[r.joint]; });
     L.forEach(r=>{ if(r.plan) FC.get(r.i).end=r.plan; });
@@ -782,7 +792,7 @@ function compute(st){
   const hr=L=>{ const f=L.filter(x=>x.fin&&x.p>0), b=f.reduce((s,x)=>s+x.p*x.q,0); return b>0?f.reduce((s,x)=>s+(x.add+x.oh)*x.q,0)/b:null; };
   const hAll=hr(M);
   M.forEach(r=>{ if(r.fin) return; const h=hr(M.filter(x=>x.g===r.g)), ratio=h!==null?h:hAll; r.fcRatio=ratio; r.prog=null; if(ratio===null) return;
-    const base=r.q*r.p; r.prog=(r.done!==null&&r.done>0)?Math.min(1,r.done/r.q):(base>0?Math.min(1,r.wdv*st.target/base):0);
+    const base=r.q*r.p; r.prog=(r.done!==null&&r.done>0)?Math.min(1,r.done/r.q):(base>0?(r.psim!==undefined?r.psim:Math.min(1,r.wdv*st.target/base)):0);
     r.fullAct=r.full; r.full=r.full+(1-r.prog)*ratio*r.p;
     if(r.sp!==null){ r.pf=r.sp-r.full; r.pc=100*r.pf/r.sp; } });
 
