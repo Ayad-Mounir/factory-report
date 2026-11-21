@@ -673,7 +673,9 @@ function compute(st){
   const open = (r,t,useAn) => (useAn?r.an:r.a)<=t && (r.b===null || r.b>=t);
   // وزن الموديل في التوزيع = قيمته (الكمية × الثمن)؛ والعمال يتنقلون بين الموديلات فالتوزيع مباشر على الموديلات المفتوحة
   const wt = r => (r.q*r.p)||r.q;
-  const elig = (t,hourlyOnly) => { const gs=G.filter(g=>(!hourlyOnly||st.groups[g].hourly) && hc(g,t)>0); return M.filter(r=>gs.includes(r.g) && open(r,t,true)); };
+  // مراحل ما بعد الخياطة (نضافة...تسليم): تستمر التكلفة بعد نهاية المجموعة حتى التسليم، وتوزَّع مع باقي الموديلات الجارية طالما هناك عمال يشتغلون
+  M.forEach(r=>{ const m=st.models[r.i]||{}; r.pe=null; if(r.b===null||m.stage===undefined||m.stage==="") return; const k=Number(m.stage); if(k===6){ const ds=(m.hist&&m.hist[6])||m.stageDate; r.pe=ds?pd(ds):null; } else r.pe=Infinity; });
+  const elig = (t,hourlyOnly) => { const gs=G.filter(g=>(!hourlyOnly||st.groups[g].hourly) && hc(g,t)>0); return M.filter(r=>(gs.includes(r.g) && open(r,t,true)) || (gs.length>0 && r.pe!==null && t>r.b && t<=r.pe)); };
   const dayW={}; st.workers.forEach(w=>{ const rt=num(w.rate)||0; days.forEach(d=>{ const v=String((w.hours||{})[d]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v); if(n!==null) dayW[d]=(dayW[d]||0)+n*rt; }); });
   if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
