@@ -678,10 +678,9 @@ function compute(st){
   if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
   winDays.forEach(t=>{ const W=dayW[dnum(t)]||0; if(!W) return; const Wm=(MWD>0&&dw(t)>0)?MWD*dw(t):0;
-    const op=elig(t,true);
-    if(!op.length){ UNAL+=W; return; }
-    const tw=op.reduce((s,r)=>s+wt(r),0);
-    op.forEach(r=>{ const f=wt(r)/tw; r.wages=(r.wages||0)+W*f; r.wagesM=(r.wagesM||0)+Wm*f; });
+    const Wh=W-Wm; // أجور الساعات: المجموعات بالساعة فقط؛ الأجور الشهرية: كل الموديلات الجارية
+    if(Wh>0){ const op=elig(t,true); if(!op.length) UNAL+=Wh; else { const tw=op.reduce((s,r)=>s+wt(r),0); op.forEach(r=>{ r.wages=(r.wages||0)+Wh*wt(r)/tw; }); } }
+    if(Wm>0){ const op=elig(t,false); if(!op.length) UNAL+=Wm; else { const tw=op.reduce((s,r)=>s+wt(r),0); op.forEach(r=>{ const f=wt(r)/tw; r.wages=(r.wages||0)+Wm*f; r.wagesM=(r.wagesM||0)+Wm*f; }); } }
   });
   const RATE_W=0;
   const YM=Y*12+Mo, cyOf=r=>{ const c=(st.models[r.i]||{}).carry; return c&&YM>c.ym?c:null; };
