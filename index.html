@@ -1176,7 +1176,7 @@ function vCosts(){
     if(t.dataset.snap){ try{ const o=JSON.parse(localStorage.getItem(KEY+"-snap-"+t.dataset.snap)); if(o&&o.v&&confirm("سيُستبدل كل ما في التطبيق بهذه النسخة. متابعة؟")){ snap(st); o.rev=window.DEFAULT_STATE.rev; st=o; save(); vCosts(); } }catch(_){} return; }
     if(t.id==="exp"||t.id==="shr"){ doBackup(t.id==="shr").then(m=>{ const el=$("#bmsg"); if(el) el.textContent=m+" "+bkLine(); }); }
     if(t.id==="reset" && confirmDel("",t)){ snap(st); st=JSON.parse(JSON.stringify(window.DEFAULT_STATE)); save(); vCosts(); } };
-  $("#imp").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(x=>{ try{ const o=JSON.parse(x); if(!o.v||!o.workers||!o.models) throw 0; if(!confirm("سيُستبدل كل ما في التطبيق ببيانات النسخة. متابعة؟")) return; snap(st); o.rev=window.DEFAULT_STATE.rev; o.lastBackup=new Date(f.lastModified).toISOString(); st=o; save(); vCosts(); $("#bmsg").textContent="تم الاسترجاع. "+bkLine(); }catch(_){ $("#bmsg").textContent="الملف غير صالح: اختر ملف النسخة الاحتياطية (نسخة_...json) الذي حفظته من التطبيق."; } }); };
+  $("#imp").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(x=>{ try{ const o=JSON.parse(x); if(!o.v||!o.workers||!o.models) throw 0; if(!confirm("سيُستبدل كل ما في التطبيق ببيانات النسخة. متابعة؟")) return; snap(st); const cu=o._cut; delete o._cut; o.rev=window.DEFAULT_STATE.rev; o.lastBackup=new Date(f.lastModified).toISOString(); st=o; save(); if(cu&&typeof cu==="object") CUTK.forEach(k=>{ if(typeof cu[k]==="string"){ try{ localStorage.setItem(k,cu[k]); }catch(e){} } }); vCosts(); $("#bmsg").textContent="تم الاسترجاع. "+bkLine(); }catch(_){ $("#bmsg").textContent="الملف غير صالح: اختر ملف النسخة الاحتياطية (نسخة_...json) الذي حفظته من التطبيق."; } }); };
 }
 async function saveFile(name,blob){
   if(window.claude){ try{ const d=await claude.use("downloads"); if(d){ await d.save({filename:name,data:blob}); return; } }catch(e){ return; } }
@@ -1500,7 +1500,9 @@ function todoCard(R){
   const bad=items.filter(x=>!x.ok).length;
   return `<div class="card"><b>${bad?"مهام اليوم — ينقص "+fa(bad):"اليوم مكتمل ✅"}</b>`+items.map(x=>`<div class="ax ${x.ok?"g":x.lv}"><span>${x.ok?"✅ ":"❌ "}${x.t}</span>${x.ok?"":x.bk?'<button class="btn alt" id="tgbk">إرسال إلى تلغرام</button>':x.extra?`<button class="btn alt" ${x.extra}>اعتماد</button>`:`<button class="btn alt" data-go="${x.go}">فتح</button>`}</div>`).join("")+`</div>`; }
 function bkBanner(){ const late=new Date().getHours()>=17&&!bkToday(); return `<div class="ax ${late?"r":"b"}"><span>${late?"⚠️ لم تُرسل نسخة اليوم بعد. ":"النسخة الاحتياطية: "}${bkLine()}</span><button class="btn ${late?"":"alt"}" id="tgbk">إرسال النسخة إلى تلغرام</button></div>`; }
-async function doBackup(share){ const blob=new Blob([JSON.stringify(st)],{type:"application/json"}), stamp=()=>{ st.lastBackup=new Date().toISOString(); save(); };
+const CUTK=["systeme-coupe-v1","fab-sheets-v1"];
+const cutPack=()=>{ const o={}; CUTK.forEach(k=>{ try{ const v=localStorage.getItem(k); if(v) o[k]=v; }catch(e){} }); return o; };
+async function doBackup(share){ const blob=new Blob([JSON.stringify(Object.assign({},st,{_cut:cutPack()}))],{type:"application/json"}), stamp=()=>{ st.lastBackup=new Date().toISOString(); save(); };
   if(share){ try{ const f=new File([blob],bkName(),{type:"application/json"}); if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:bkName()}); stamp(); return "تمت المشاركة."; } }catch(e){ if(e&&e.name==="AbortError") return "أُلغيت المشاركة."; } return "المشاركة غير متاحة هنا؛ استعمل «حفظ نسخة» ثم أرسل الملف بنفسك."; }
   await saveFile(bkName(),blob); stamp(); return "تم حفظ النسخة (مجلد التنزيلات أو المكان الذي اخترته)."; }
 /* ===== v2: الرئيسية / اليوم / البطاقات ===== */
