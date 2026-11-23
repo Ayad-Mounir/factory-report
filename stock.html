@@ -128,16 +128,23 @@ bdi{unicode-bidi:isolate}
 }
 
 html.embed header.top .hr{display:none}html.embed #btnTheme,html.embed #thm2{display:none}html.embed header.top{padding-top:0}html.embed body{padding-bottom:16px}
+html.embed #tabFab{padding-top:8px}html.embed #tabFab>h2{display:none}html.embed #tabFab>.muted{font-size:12.5px;margin:2px 0 6px}
+html.embed #tabFab .row{gap:6px;margin:8px 0}
+html.embed #tabFab>.row>button{flex:1 1 44%;margin:0;padding:9px 6px;font-size:14px;text-align:center}
+html.embed #tabFab>.row>button.primary{order:-1}
+html.embed #tabFab>.card{padding:10px;margin-bottom:10px}
+html.embed #tabFab>.card>.row>button,html.embed #tabFab>.card>.row>label{flex:1 1 28%;margin:0;padding:9px 4px;font-size:13.5px;text-align:center}
+html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}html.embed #wz td input[data-r],html.embed #wz td input[data-rq]{min-height:34px;font-size:16px}
 </style><script>if(location.search.indexOf("embed=1")>-1)document.documentElement.className+=" embed";</script><script>try{var th=localStorage.getItem("rapport-theme")||localStorage.getItem("cut-theme");if(th)document.documentElement.setAttribute("data-theme",th)}catch(e){}</script></head><body>
 
-<header class="top"><div class="hr"><span><button id="back" hidden>← القائمة</button></span><b id="ttl">✂️ نظام التقطيع</b></div><nav class="tabs"><button data-nav="fab">📦 المخزون</button><button data-nav="orders">📋 الطلبيات</button></nav></header>
+<header class="top"><div class="hr"><span><button id="back" hidden>← القائمة</button></span><b id="ttl">✂️ نظام التقطيع</b></div><nav class="tabs"><button data-nav="fab">📦 المخزون</button><button data-nav="orders">📋 الطلبيات</button><button id="tabMenu" type="button" style="display:none">☰ القائمة</button></nav></header>
 
 <main class="pg" id="scrHome"><div class="mgrid" id="mg"></div><div style="text-align:center;margin-top:14px"><button class="btn" id="thm2" style="background:transparent;color:var(--fg);border:1px solid var(--inbd);font-weight:400;border-radius:10px;padding:9px 14px;font:inherit">🌙 الوضع الليلي</button></div></main>
-<main class="pg" id="scrOrders" hidden><div class="kts"><div class="kt"><b id="k1">0</b><small>بطاقات</small></div><div class="kt"><b id="k2">0</b><small>قطعة</small></div><div class="kt"><b id="k3">0 د</b><small>المجموع</small></div></div><div id="list"></div></main>
+<main class="pg" id="scrOrders" hidden><div class="kts"><div class="kt"><b id="k1">0</b><small>بطاقات</small></div><div class="kt"><b id="k2">0</b><small>قطعة</small></div><div class="kt"><b id="k3">0 د</b><small>المجموع</small></div></div><div id="pendMain"></div><div id="list"></div></main>
 <div id="wz" hidden></div>
 
 <main class="pg" id="tabFab" hidden>
-<h2>المخزون (الأقمشة والرولوات)</h2><div class="muted">أضف المخزون من PDF أو صورة، ثم اضغط على سطر الرولو لتحديده وأنشئ الموديل من نفس الصفحة.</div>
+<div id="pendBanner" hidden></div><h2>المخزون (الأقمشة والرولوات)</h2><div class="muted">أضف المخزون من PDF أو صورة، ثم اضغط على سطر الرولو لتحديده وأنشئ الموديل من نفس الصفحة.</div>
 <div class="row"><button id="btnBackup">💾 نسخة احتياطية</button><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings">⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden></div>
 <section class="card">
   <div class="row">
@@ -1062,7 +1069,7 @@ function blkCalc(b,ppp){ const on=onR(b),gross=on.reduce((s,r)=>s+(+r.l||0),0),p
 function shTot(c){ const h=c.sh; if(!h) return null; const ppp=pppOf(h.sizes); let pl=0,kl=0,n=0,rq=0,cost=0; (h.blocks||[]).forEach(b=>{ const px=prixOf(b); onR(b).forEach(r=>{ n++; const p=+r.p||0; pl+=p; kl+=+r.l||0; rq+=+r.q||0; cost+=(+r.l||0)*px; }); }); const pcs=pl*ppp+rq; return {ppp,pl,pcs,kl,n,rq,cost,perPly:pl>0?kl/pl:0,top:pl>0&&pcs>0?kl/pcs:0,pricePc:pl>0&&pcs>0&&cost>0?cost/pcs:0}; }
 // ---------- الشاشات
 const scr={home:$("#scrHome"),orders:$("#scrOrders"),fab:$("#tabFab")}; const TT={home:"✂️ نظام التقطيع",orders:"✂️ نظام التقطيع",fab:"✂️ نظام التقطيع"};
-function show(n){ Object.keys(scr).forEach(k=>scr[k].hidden=k!==n); $("#back").hidden=true; $("#ttl").textContent=TT[n]; window.scrollTo(0,0); if(n==="orders") render(); if(n==="home") home(); if(n==="fab"&&window.FAB) FAB.render(); document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("on",b.dataset.nav===n)); }
+function show(n){ Object.keys(scr).forEach(k=>scr[k].hidden=k!==n); $("#back").hidden=true; $("#ttl").textContent=TT[n]; window.scrollTo(0,0); if(n==="orders") render(); drawPend(); if(n==="home") home(); if(n==="fab"&&window.FAB) FAB.render(); document.querySelectorAll("[data-nav]").forEach(b=>b.classList.toggle("on",b.dataset.nav===n)); }
 $("#back").onclick=()=>show("home"); document.querySelectorAll("[data-nav]").forEach(b=>b.onclick=()=>show(b.dataset.nav));
 function home(){ const C=st.cards,S=sheets(),pc=C.reduce((s,c)=>{const t=shTot(c);return s+(t?t.pcs:0)},0);
  $("#mg").innerHTML=[["new","➕","طلبية تقطيع جديدة","الموديل ← الرولوات ← الطيات ← التقرير","first"],["orders","📋","الطلبيات",C.length?`${C.length} طلبية · ${pc} قطعة مقطوعة`:"ما كاين طلبيات بعد",""],["fab","📦","المخزون",S.length?`${S.length} مخزون محفوظ`:"إضافة من PDF أو صورة",""],["blank","🖨️","ورقة فارغة للطباعة","ورقة الرولوات لتعبئتها باليد",""],["backup","💾","نسخة احتياطية","حفظ كل البيانات",""]].map(x=>`<button class="mtile ${x[4]}" data-go="${x[0]}"><span class="mi">${x[1]}</span><b>${x[2]}</b><small>${x[3]}</small></button>`).join(""); }
@@ -1374,7 +1381,29 @@ $("#btnBlankFab").onclick=()=>{ if(!window.jspdf) return toast("PDF غير جا�
  const blob=doc.output("blob"),file=new File([blob],"feuille_tissu_vide.pdf",{type:"application/pdf"});
  const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="feuille_tissu_vide.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
  if(navigator.canShare&&navigator.canShare({files:[file]})) navigator.share({files:[file],title:"feuille_tissu_vide.pdf"}).catch(()=>{}); else dl(); };
+// ---- طلبيات التقرير الشامل الجديدة بانتظار التقطيع (قراءة فقط من بيانات التقرير، لا كتابة فيها) ----
+const MAINKEY="rapport-usine-v1", CUT0="2026-11-22"; let oldOn=false;
+function mainModels(){ try{ const o=JSON.parse(localStorage.getItem(MAINKEY)||"null"); return (o&&Array.isArray(o.models))?o.models:[]; }catch(e){ return []; } }
+const mCreated=m=>String((m.hist&&m.hist[0])||m.cutEnd||"").slice(0,10);
+const nrm=s=>String(s==null?"":s).trim().toLowerCase();
+function pendList(all){ const skip=st.skip||[]; return mainModels().filter(m=>nrm(m.name)&&!m.done&&(all||mCreated(m)>=CUT0||m.stage===0||m.stage==="0")&&!st.cards.some(c=>nrm(c.name)===nrm(m.name))&&!skip.includes(nrm(m.name))); }
+function drawPend(){
+  const P=pendList(oldOn), N=pendList(false).length, el=$("#pendMain"), bn=$("#pendBanner"), tb=document.querySelector('[data-nav="orders"]');
+  if(tb) tb.textContent="📋 الطلبيات"+(N?" ("+N+")":"");
+  if(bn){ bn.hidden=!N; bn.innerHTML=N?`🔔 ${N} طلبية جديدة من التقرير بانتظار التقطيع ← افتح «الطلبيات»`:""; bn.style.cssText="background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:9px 12px;margin:8px 0;font-size:14px;cursor:pointer"; bn.onclick=()=>show("orders"); }
+  if(!el) return;
+  el.innerHTML=`<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px"><h3 style="margin:0 0 4px;font-size:15px">📥 من التقرير الشامل · بانتظار التقطيع${P.length?" ("+P.length+")":""}</h3>`+
+   (P.length?P.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${m.g?"مجموعة "+esc(m.g):""}${m.g&&+m.qty>0?" · ":""}${+m.qty>0?f(+m.qty)+" قطعة":""}</div></div><div style="display:flex;gap:6px;flex:none"><button class="btn gold primary" data-pm="${esc(m.name)}">▶ ابدأ التقطيع</button><button class="btn alt" data-ps="${esc(m.name)}">تجاهل</button></div></div>`).join(""):`<div style="color:var(--mut);font-size:14px;padding-top:6px">لا توجد طلبيات جديدة بانتظار التقطيع.</div>`)+
+   `<div style="margin-top:8px"><button class="btn alt" data-po="1" style="font-size:13px;padding:6px 10px">${oldOn?"إخفاء الموديلات الأقدم":"عرض الموديلات الأقدم"}</button></div></div>`;
+  el.onclick=e=>{ const b=e.target.closest("[data-pm],[data-ps],[data-po]"); if(!b) return;
+    if(b.dataset.po){ oldOn=!oldOn; return drawPend(); }
+    if(b.dataset.ps!==undefined){ (st.skip=st.skip||[]).push(nrm(b.dataset.ps)); save(); return drawPend(); }
+    const m=pendList(true).find(x=>nrm(x.name)===nrm(b.dataset.pm)); if(!m) return;
+    wzOpen(null,1); const cc=ensureCard(); cc.name=String(m.name).trim(); if(+m.qty>0) cc.qty=+m.qty; save(); wzDraw(); };
+}
+
 show("fab");
 })();
 </script>
+<script>(function(){var b=document.getElementById("tabMenu");if(b)b.onclick=function(){try{parent.postMessage({stk:"menu"},location.origin)}catch(e){}}})();</script>
 </body></html>

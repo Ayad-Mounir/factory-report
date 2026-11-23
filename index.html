@@ -929,15 +929,17 @@ function vMenu(){
   <style>.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mtile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit;cursor:pointer;text-align:center;min-height:124px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.mtile:active{transform:scale(.97)}.mtile:first-child{grid-column:1/-1}.mtile .mi{font-size:32px;line-height:1}.mtile b{font-size:16px;color:var(--navy)}.mtile small{font-size:12px;color:var(--mut)}@media(min-width:700px){.mgrid{grid-template-columns:repeat(3,1fr)}.mtile:first-child{grid-column:auto}}</style>`;
   view.oninput=null; view.onchange=null; view.onclick=e=>{ if(e.target.id==="thm"){ const n=isDark()?"light":"dark"; try{localStorage.setItem("rapport-theme",n)}catch(x){} document.documentElement.setAttribute("data-theme",n); return vMenu(); } const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
 }
-/* ---------- المخزون (نظام التقطيع في صفحة مستقلة stock.html) ---------- */
+/* ---------- المخزون (نظام التقطيع في صفحة مستقلة stock.html، بملء الشاشة) ---------- */
 let _stkFit=null;
+addEventListener("message",e=>{ if(e.origin===location.origin&&e.data&&e.data.stk==="menu") go("menu"); });
 function vStock(){
  view.oninput=null; view.onchange=null; view.onclick=null;
- view.innerHTML=`<iframe id="stk" title="المخزون" src="stock.html?embed=1" allow="camera; clipboard-write; web-share" style="display:block;width:100%;border:0;height:70vh;background:var(--bg)"></iframe>`;
- document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t==="menu"));
+ if(!document.getElementById("stkcss")){ const s=document.createElement("style"); s.id="stkcss"; s.textContent="body.stk .top{display:none}body.stk main{padding:0!important;max-width:none!important}"; document.head.appendChild(s); }
+ document.body.classList.add("stk");
+ view.innerHTML=`<iframe id="stk" title="المخزون" src="stock.html?embed=1" allow="camera; clipboard-write; web-share" style="display:block;width:100%;border:0;height:100vh;background:var(--bg)"></iframe>`;
  const f=document.getElementById("stk");
- const fit=()=>{ if(!f.isConnected) return; f.style.height=Math.max(320,innerHeight-f.getBoundingClientRect().top)+"px"; };
- fit(); if(_stkFit) removeEventListener("resize",_stkFit); _stkFit=fit; addEventListener("resize",_stkFit); setTimeout(fit,300);
+ const fit=()=>{ if(!f.isConnected) return; const h=(window.visualViewport?visualViewport.height:innerHeight)-f.getBoundingClientRect().top; f.style.height=Math.max(320,h)+"px"; };
+ fit(); if(_stkFit){ removeEventListener("resize",_stkFit); if(window.visualViewport) visualViewport.removeEventListener("resize",_stkFit); } _stkFit=fit; addEventListener("resize",_stkFit); if(window.visualViewport) visualViewport.addEventListener("resize",_stkFit); setTimeout(fit,300);
 }
 function isDark(){ const a=document.documentElement.getAttribute("data-theme"); return a?a==="dark":matchMedia("(prefers-color-scheme:dark)").matches; }
 function vQuick(){ const R=compute(st), S=R.M.filter(r=>r.sp!==null), ts=S.reduce((s,r)=>s+r.sp*r.q,0), al=alerts(R), D=cmpData();
@@ -1040,7 +1042,7 @@ function vInvoice(){
     if(d.icx){ if(iArm!==d.icx){ iArm=d.icx; setTimeout(()=>{ if(iArm===d.icx){ iArm=null; if(tab==="invoice") vInvoice(); } },4000); return vInvoice(); }
       iArm=null; st.invoices=(st.invoices||[]).filter(x=>x.id!==d.icx); st.models.forEach(m=>{ if(m.inv===d.icx) delete m.inv; }); save(); return vInvoice(); } };
 }
-function go(t){ view.onchange=null; tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,forecast:vForecast,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit,invoice:vInvoice,stock:vStock})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
+function go(t){ view.onchange=null; if(t!=="stock") document.body.classList.remove("stk"); tab=t; location.hash=t; document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("on",b.dataset.t===secOf(t))); $("#monthLbl").textContent=mLabel(); ({home:vHome,today:vToday,track:vTrack,forecast:vForecast,workers:vWorkers,groups:vGroups,models:vModels,costs:vCosts,forms:vForms,report:vReport,cmp:vCompare,menu:vMenu,quick:vQuick,profit:vProfit,invoice:vInvoice,stock:vStock})[t](); window.scrollTo(0,0); requestAnimationFrame(()=>window.scrollTo(0,0)); }
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>go(b.dataset.t));
 { const bh=document.getElementById("brandHome"); if(bh) bh.onclick=()=>go("menu"); }
 
