@@ -1101,7 +1101,7 @@ function vModels(){
   <div class="stg" style="margin:0 0 6px">${chip("mg","all","كل المجموعات",mGf)}${G.map(g=>chip("mg",g,"G"+g,mGf)).join("")}</div>
   <div class="stg" style="margin:0 0 10px">${chip("ms","all","الكل",mSf)}${chip("ms","cut","التقطيع",mSf)}${chip("ms","open","جارية",mSf)}${chip("ms","fin","بعد المجموعة",mSf)}${chip("ms","deliv","مسلَّمة",mSf)}${chip("ms","inc","ناقصة",mSf)}</div>
   <div class="note">${fa(rows.length)} طلبية من ${fa(st.models.length)}. الطلبية بلا مجموعة أو ثمن تبقى خارج الحساب. اضغط الطلبية لتعديلها.</div>`;
-  h+=rows.map(({m,i,inf})=>`<div class="orow" data-edit="${i}"><div class="oh"><b>${esc(m.name)||"(بلا اسم)"}</b><span class="bdg ${inf.cls}">${inf.label}</span></div><div class="od"><span class="tag">${m.g?"G"+m.g+" "+esc((st.groups[m.g]||{}).resp||""):"بلا مجموعة"}</span><span>${fa(num(m.qty)||0)} قطعة</span><span>مجموعة ${m.price!==""?fa(num(m.price)||0,2):"—"} د</span><span>بيع ${m.sale!==""?fa(num(m.sale)||0,2):"—"} د</span>${Number(m.stage)===0&&m.stage!==""&&!m.start?`<span>انتهاء التقطيع ${ddm(m.cutEnd)||"؟"}</span>`:`<span>${ddm(m.start)||"؟"} ← ${m.end?ddm(m.end):"جارية"}</span>`}</div>${isEmptyM(m)?`<button class="btn del" data-del="${i}" style="margin-top:6px">حذف الطلبية الفارغة</button>`:""}${Number(m.stage)===0&&m.stage!==""&&!m.start?"":mWarn(m)}</div>`).join("")||'<div class="note">لا طلبيات مطابقة.</div>';
+  h+=rows.map(({m,i,inf})=>`<div class="orow" data-edit="${i}"><div class="oh"><b>${esc(m.name)||"(بلا اسم)"}</b><span class="bdg ${inf.cls}">${inf.label}</span></div><div class="od"><span class="tag">${m.g?"G"+m.g+" "+esc((st.groups[m.g]||{}).resp||""):"بلا مجموعة"}</span><span>${fa(num(m.qty)||0)} قطعة</span><span>مجموعة ${m.price!==""?fa(num(m.price)||0,2):"—"} د</span><span>بيع ${m.sale!==""?fa(num(m.sale)||0,2):"—"} د</span>${Number(m.stage)===0&&m.stage!==""&&!m.start?`<span>انتهاء التقطيع ${ddm(m.cutEnd)||"؟"}</span>`:`<span>${ddm(m.start)||"؟"} ← ${m.end?ddm(m.end):"جارية"}</span>`}</div>${isEmptyM(m)?`<button class="btn del" data-del="${i}" style="margin-top:6px">حذف الطلبية الفارغة</button>`:""}${nmOf(m)&&!m.end?`<button class="btn ${m.cutPush?"alt":"gold"}" data-push="${i}" style="margin-top:6px">${m.cutPush?"✂ مدفوعة للتقطيع (إلغاء)":"✂ ادفع للتقطيع"}</button>`:""}${Number(m.stage)===0&&m.stage!==""&&!m.start?"":mWarn(m)}</div>`).join("")||'<div class="note">لا طلبيات مطابقة.</div>';
   h+=`<button class="ofab" id="addM">+ طلبية</button>`;
   if(mEdit!==null&&st.models[mEdit]){ const m=st.models[mEdit], i=mEdit;
     h+=`<div class="ebg" data-close="1"><div class="esheet"><div class="mh"><b>${esc(m.name)||"طلبية جديدة"}</b><span><button class="btn del" data-del="${i}">حذف</button> <button class="btn alt" data-close="1">إغلاق</button></span></div>
@@ -1118,12 +1118,13 @@ function vModels(){
       <label>الكمية المنجزة<input inputmode="numeric" data-f="done" value="${esc(m.done)}"></label>
       <label>نهاية متوقعة (إن لم تنتهِ)<input type="date" data-f="plan" value="${esc(m.plan||"")}"></label></div></details>
     </div>
-    <div class="bar"><button class="btn" data-close="1">تم</button><button class="btn del" data-del="${i}">حذف الطلبية</button></div></div></div>`; }
+    <div class="bar"><button class="btn" data-close="1">تم</button>${nmOf(m)&&!m.end?`<button class="btn ${m.cutPush?"alt":"gold"}" data-push="${i}">${m.cutPush?"✂ مدفوعة للتقطيع (إلغاء)":"✂ ادفع للتقطيع"}</button>`:""}<button class="btn del" data-del="${i}">حذف الطلبية</button></div></div></div>`; }
   view.innerHTML=h;
   const keepQ=()=>{ const el=$("#mq"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } };
   view.oninput=e=>{ const t=e.target; if(t.id==="mq"){ mQ=t.value; vModels(); keepQ(); return; } const c=t.closest(".mcard"); if(!c||!t.dataset.f) return; st.models[+c.dataset.i][t.dataset.f]=t.value; save(); };
   view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
   view.onclick=e=>{ const t=e.target, d=t.dataset, ed=t.closest&&t.closest("[data-edit]");
+    if(d.push!==undefined){ const m=st.models[+d.push]; if(m){ m.cutPush=m.cutPush?0:1; save(); alert_(m.cutPush?"دُفعت الطلبية إلى التقطيع":"أُلغي الدفع"); vModels(); } return; }
     if(d.close&&(t.classList.contains("ebg")||t.tagName==="BUTTON")){ const cm=st.models[mEdit]; if(cm&&isEmptyM(cm)){ st.models.splice(mEdit,1); save(); alert_("حُذفت الطلبية الفارغة"); } mEdit=null; return vModels(); }
     if(d.mg!==undefined){ mGf=d.mg; return vModels(); } if(d.ms!==undefined){ mSf=d.ms; return vModels(); }
     if(t.id==="addM"){ st.models.push({g:mGf!=="all"?mGf:"",name:"",qty:"",price:"",sale:"",start:"",end:"",fixed:0,joint:"",done:"",stage:0,stageDate:st.today||"",cutEnd:st.today||"",hist:{0:st.today||""}}); save(); mEdit=st.models.length-1; return vModels(); }
@@ -1176,7 +1177,7 @@ function vCosts(){
     if(t.dataset.snap){ try{ const o=JSON.parse(localStorage.getItem(KEY+"-snap-"+t.dataset.snap)); if(o&&o.v&&confirm("سيُستبدل كل ما في التطبيق بهذه النسخة. متابعة؟")){ snap(st); o.rev=window.DEFAULT_STATE.rev; st=o; save(); vCosts(); } }catch(_){} return; }
     if(t.id==="exp"||t.id==="shr"){ doBackup(t.id==="shr").then(m=>{ const el=$("#bmsg"); if(el) el.textContent=m+" "+bkLine(); }); }
     if(t.id==="reset" && confirmDel("",t)){ snap(st); st=JSON.parse(JSON.stringify(window.DEFAULT_STATE)); save(); vCosts(); } };
-  $("#imp").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(x=>{ try{ const o=JSON.parse(x); if(!o.v||!o.workers||!o.models) throw 0; if(!confirm("سيُستبدل كل ما في التطبيق ببيانات النسخة. متابعة؟")) return; snap(st); o.rev=window.DEFAULT_STATE.rev; o.lastBackup=new Date(f.lastModified).toISOString(); st=o; save(); vCosts(); $("#bmsg").textContent="تم الاسترجاع. "+bkLine(); }catch(_){ $("#bmsg").textContent="الملف غير صالح: اختر ملف النسخة الاحتياطية (نسخة_...json) الذي حفظته من التطبيق."; } }); };
+  $("#imp").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(x=>{ try{ const o=JSON.parse(x); if(!o.v||!o.workers||!o.models) throw 0; if(!confirm("سيُستبدل كل ما في التطبيق ببيانات النسخة. متابعة؟")) return; snap(st); const cu=o._cut; delete o._cut; o.rev=window.DEFAULT_STATE.rev; o.lastBackup=new Date(f.lastModified).toISOString(); st=o; save(); if(cu&&typeof cu==="object") CUTK.forEach(k=>{ if(typeof cu[k]==="string"){ try{ localStorage.setItem(k,cu[k]); }catch(e){} } }); vCosts(); $("#bmsg").textContent="تم الاسترجاع. "+bkLine(); }catch(_){ $("#bmsg").textContent="الملف غير صالح: اختر ملف النسخة الاحتياطية (نسخة_...json) الذي حفظته من التطبيق."; } }); };
 }
 async function saveFile(name,blob){
   if(window.claude){ try{ const d=await claude.use("downloads"); if(d){ await d.save({filename:name,data:blob}); return; } }catch(e){ return; } }
@@ -1500,7 +1501,10 @@ function todoCard(R){
   const bad=items.filter(x=>!x.ok).length;
   return `<div class="card"><b>${bad?"مهام اليوم — ينقص "+fa(bad):"اليوم مكتمل ✅"}</b>`+items.map(x=>`<div class="ax ${x.ok?"g":x.lv}"><span>${x.ok?"✅ ":"❌ "}${x.t}</span>${x.ok?"":x.bk?'<button class="btn alt" id="tgbk">إرسال إلى تلغرام</button>':x.extra?`<button class="btn alt" ${x.extra}>اعتماد</button>`:`<button class="btn alt" data-go="${x.go}">فتح</button>`}</div>`).join("")+`</div>`; }
 function bkBanner(){ const late=new Date().getHours()>=17&&!bkToday(); return `<div class="ax ${late?"r":"b"}"><span>${late?"⚠️ لم تُرسل نسخة اليوم بعد. ":"النسخة الاحتياطية: "}${bkLine()}</span><button class="btn ${late?"":"alt"}" id="tgbk">إرسال النسخة إلى تلغرام</button></div>`; }
-async function doBackup(share){ const blob=new Blob([JSON.stringify(st)],{type:"application/json"}), stamp=()=>{ st.lastBackup=new Date().toISOString(); save(); };
+const nmOf=m=>String((m&&m.name)||"").trim();
+const CUTK=["systeme-coupe-v1","fab-sheets-v1"];
+const cutPack=()=>{ const o={}; CUTK.forEach(k=>{ try{ const v=localStorage.getItem(k); if(v) o[k]=v; }catch(e){} }); return o; };
+async function doBackup(share){ const blob=new Blob([JSON.stringify(Object.assign({},st,{_cut:cutPack()}))],{type:"application/json"}), stamp=()=>{ st.lastBackup=new Date().toISOString(); save(); };
   if(share){ try{ const f=new File([blob],bkName(),{type:"application/json"}); if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:bkName()}); stamp(); return "تمت المشاركة."; } }catch(e){ if(e&&e.name==="AbortError") return "أُلغيت المشاركة."; } return "المشاركة غير متاحة هنا؛ استعمل «حفظ نسخة» ثم أرسل الملف بنفسك."; }
   await saveFile(bkName(),blob); stamp(); return "تم حفظ النسخة (مجلد التنزيلات أو المكان الذي اخترته)."; }
 /* ===== v2: الرئيسية / اليوم / البطاقات ===== */
