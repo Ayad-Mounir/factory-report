@@ -1458,6 +1458,10 @@ function drawPend(){
     wzOpen(null,1); const cc=ensureCard(); cc.name=String(m.name).trim(); if(+m.qty>0) cc.qty=+m.qty; save(); wzDraw(); };
 }
 
+const _rf=()=>{ try{ drawPend(); }catch(e){} };
+window.addEventListener("storage",e=>{ if(!e.key||e.key===MAINKEY) _rf(); });
+window.addEventListener("focus",_rf); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) _rf(); });
+let _pl=localStorage.getItem(MAINKEY); setInterval(()=>{ const n=localStorage.getItem(MAINKEY); if(n!==_pl){ _pl=n; if(!(document.activeElement&&document.activeElement.id==="pendQ")) _rf(); } },2000);
 show("fab");
 })();
 </script>
