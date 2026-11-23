@@ -929,6 +929,12 @@ function vMenu(){
   <style>.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mtile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit;cursor:pointer;text-align:center;min-height:124px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.mtile:active{transform:scale(.97)}.mtile:first-child{grid-column:1/-1}.mtile .mi{font-size:32px;line-height:1}.mtile b{font-size:16px;color:var(--navy)}.mtile small{font-size:12px;color:var(--mut)}@media(min-width:700px){.mgrid{grid-template-columns:repeat(3,1fr)}.mtile:first-child{grid-column:auto}}</style>`;
   view.oninput=null; view.onchange=null; view.onclick=e=>{ if(e.target.id==="thm"){ const n=isDark()?"light":"dark"; try{localStorage.setItem("rapport-theme",n)}catch(x){} document.documentElement.setAttribute("data-theme",n); return vMenu(); } const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
 }
+/* ---------- اختيار الطلبية من طلبيات التقطيع (قراءة فقط من ملخص يكتبه نظام التقطيع) ---------- */
+function stkOrders(){ try{ const a=JSON.parse(localStorage.getItem("stk:orders")||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+const nrmN=v=>String(v==null?"":v).trim().toLowerCase();
+function stkRemain(o,exI){ const k=nrmN(o.name), cur=st.models[exI]||{}, g=nrmN(cur.g); const used=st.models.reduce((a,m,j)=>a+(j!==exI&&nrmN(m.name)===k&&nrmN(m.g)===g?(num(m.qty)||0):0),0); return Math.max(0,(+o.pcs||0)-used); } // الطلبية تُأخذ مرة لكل مجموعة: الخصم فقط من نفس المجموعة، ومجموعة أخرى تأخذ الكمية كاملة
+function stkPickHtml(i,m){ const L=stkOrders(), cur=nrmN(m.name);
+ return `<label class="span2">اختر من طلبيات التقطيع<select id="stkPick"><option value="">${L.length?"— اختر طلبية من التقطيع —":"لا طلبيات تقطيع بعد (أنشئها من «المخزون»)"}</option>${L.map((o,j)=>`<option value="${j}" ${nrmN(o.name)===cur?"selected":""}>${esc(o.name)} · ${fa(+o.pcs||0)} ق · المتبقي ${fa(stkRemain(o,i))}</option>`).join("")}</select></label>`; }
 /* ---------- المخزون (نظام التقطيع في صفحة مستقلة stock.html، بملء الشاشة) ---------- */
 let _stkFit=null;
 addEventListener("message",e=>{ if(e.origin===location.origin&&e.data&&e.data.stk==="menu") go("menu"); });
@@ -1106,6 +1112,7 @@ function vModels(){
   if(mEdit!==null&&st.models[mEdit]){ const m=st.models[mEdit], i=mEdit;
     h+=`<div class="ebg" data-close="1"><div class="esheet"><div class="mh"><b>${esc(m.name)||"طلبية جديدة"}</b><span><button class="btn del" data-del="${i}">حذف</button> <button class="btn alt" data-close="1">إغلاق</button></span></div>
     <div class="mcard" data-i="${i}">
+    ${stkPickHtml(i,m)}
     <label class="span2">اسم الموديل<input data-f="name" value="${esc(m.name)}"></label>
     <label class="span2">تاريخ انتهاء التقطيع<input type="date" data-f="cutEnd" value="${esc(m.cutEnd||"")}"></label>
     <label>المجموعة<select data-f="g"><option value="">—</option>${G.map(g=>`<option value="${g}" ${String(m.g)===g?"selected":""}>G${g} ${esc(st.groups[g].resp)}</option>`).join("")}</select></label>
@@ -1122,7 +1129,7 @@ function vModels(){
   view.innerHTML=h;
   const keepQ=()=>{ const el=$("#mq"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } };
   view.oninput=e=>{ const t=e.target; if(t.id==="mq"){ mQ=t.value; vModels(); keepQ(); return; } const c=t.closest(".mcard"); if(!c||!t.dataset.f) return; st.models[+c.dataset.i][t.dataset.f]=t.value; save(); };
-  view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
+  view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(t.id==="stkPick"&&c){ const o=stkOrders()[+t.value], k=+c.dataset.i; if(o&&st.models[k]){ const mm=st.models[k]; mm.name=o.name; if(!num(mm.qty)){ const r=stkRemain(o,k); mm.qty=r?String(r):""; } save(); vModels(); } return; } if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
   view.onclick=e=>{ const t=e.target, d=t.dataset, ed=t.closest&&t.closest("[data-edit]");
     if(d.push!==undefined){ const m=st.models[+d.push]; if(m){ m.cutPush=m.cutPush?0:1; save(); alert_(m.cutPush?"دُفعت الطلبية إلى التقطيع":"أُلغي الدفع"); vModels(); } return; }
     if(d.close&&(t.classList.contains("ebg")||t.tagName==="BUTTON")){ const cm=st.models[mEdit]; if(cm&&isEmptyM(cm)){ st.models.splice(mEdit,1); save(); alert_("حُذفت الطلبية الفارغة"); } mEdit=null; return vModels(); }

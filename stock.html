@@ -1043,7 +1043,8 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
 let st={cards:[]},delId=null;
 try{const r=localStorage.getItem(KEY);if(r)st=JSON.parse(r)}catch(e){}
 let usedC=null;
-const save=()=>{usedC=null;try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast("تعذر الحفظ")}};
+const syncSum=()=>{ try{ localStorage.setItem("stk:orders",JSON.stringify(st.cards.map(c=>{ const t=shTot(c); return {id:c.id,name:String(c.name||"").trim(),pcs:t?t.pcs:0,date:c.date||""}; }).filter(x=>x.name))); }catch(e){} };
+const save=()=>{usedC=null;try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast("تعذر الحفظ")} syncSum();};
 function usedAll(){ if(usedC) return usedC; const m={}; st.cards.forEach(c=>{ if(!c.sh) return; c.sh.blocks.forEach(b=>{ if(!b.sid||b.ci===undefined) return; b.rolls.forEach((r,ri)=>{ if(r.on!==false&&!m[b.sid+":"+b.ci+":"+ri]) m[b.sid+":"+b.ci+":"+ri]={name:c.name||"طلبية بلا اسم",id:c.id}; }); }); }); return usedC=m; }
 window.FAB_USED=(sid,ci,ri)=>{ const u=usedAll()[sid+":"+ci+":"+ri]; return u?u.name:""; };
 const num=v=>{const n=parseFloat(String(v).replace(",",".").replace(/\s/g,""));return isFinite(n)?n:null};
@@ -1459,6 +1460,7 @@ const _rf=()=>{ try{ drawPend(); }catch(e){} };
 window.addEventListener("storage",e=>{ if(!e.key||e.key===MAINKEY) _rf(); });
 window.addEventListener("focus",_rf); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) _rf(); });
 let _pl=localStorage.getItem(MAINKEY); setInterval(()=>{ const n=localStorage.getItem(MAINKEY); if(n!==_pl){ _pl=n; if(!(document.activeElement&&document.activeElement.id==="pendQ")) _rf(); } },2000);
+syncSum();
 show("fab");
 })();
 </script>
