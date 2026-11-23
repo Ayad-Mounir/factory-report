@@ -1428,19 +1428,24 @@ const MAINKEY="rapport-usine-v1", CUT0="2026-11-22"; let oldOn=false;
 function mainModels(){ try{ const o=JSON.parse(localStorage.getItem(MAINKEY)||"null"); return (o&&Array.isArray(o.models))?o.models:[]; }catch(e){ return []; } }
 const mCreated=m=>String((m.hist&&m.hist[0])||m.cutEnd||"").slice(0,10);
 const nrm=s=>String(s==null?"":s).trim().toLowerCase();
-function pendList(all){ const skip=st.skip||[]; return mainModels().filter(m=>nrm(m.name)&&!m.done&&(all||mCreated(m)>=CUT0||m.stage===0||m.stage==="0")&&!st.cards.some(c=>nrm(c.name)===nrm(m.name))&&!skip.includes(nrm(m.name))); }
+function pendList(){ // = موديلات التقرير الموجودة فعلاً في مرحلة «التقطيع» (لم تبدأ ولم تنتهِ ولم تتجاوزها)
+  let o=null; try{ o=JSON.parse(localStorage.getItem(MAINKEY)||"null"); }catch(e){} if(!o||!Array.isArray(o.models)) return [];
+  const mig=o.stgv===2, today=String(o.today||"").slice(0,10)||new Date().toISOString().slice(0,10), skip=st.skip||[];
+  return o.models.filter(m=>{ if(!nrm(m.name)) return false; if(m.end) return false;
+    if(m.stage===undefined||m.stage===null||m.stage==="") return false; const k=Number(m.stage)+(mig?0:1); if(isNaN(k)||k!==0) return false;
+    if(m.start&&String(m.start).slice(0,10)<=today) return false; if(parseFloat(m.done)>0) return false;
+    if(st.cards.some(c=>nrm(c.name)===nrm(m.name))) return false; if(skip.includes(nrm(m.name))) return false; return true; }); }
 function drawPend(){
-  const P=pendList(oldOn), N=pendList(false).length, el=$("#pendMain"), bn=$("#pendBanner"), tb=document.querySelector('[data-nav="orders"]');
+  const P=pendList(), N=P.length, el=$("#pendMain"), bn=$("#pendBanner"), tb=document.querySelector('[data-nav="orders"]');
   if(tb) tb.textContent="📋 الطلبيات"+(N?" ("+N+")":"");
   if(bn){ bn.hidden=!N; bn.innerHTML=N?`🔔 ${N} طلبية جديدة من التقرير بانتظار التقطيع ← افتح «الطلبيات»`:""; bn.style.cssText="background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:9px 12px;margin:8px 0;font-size:14px;cursor:pointer"; bn.onclick=()=>show("orders"); }
   if(!el) return;
   el.innerHTML=`<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px"><h3 style="margin:0 0 4px;font-size:15px">📥 من التقرير الشامل · بانتظار التقطيع${P.length?" ("+P.length+")":""}</h3>`+
    (P.length?P.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${m.g?"مجموعة "+esc(m.g):""}${m.g&&+m.qty>0?" · ":""}${+m.qty>0?f(+m.qty)+" قطعة":""}</div></div><div style="display:flex;gap:6px;flex:none"><button class="btn gold primary" data-pm="${esc(m.name)}">▶ ابدأ التقطيع</button><button class="btn alt" data-ps="${esc(m.name)}">تجاهل</button></div></div>`).join(""):`<div style="color:var(--mut);font-size:14px;padding-top:6px">لا توجد طلبيات جديدة بانتظار التقطيع.</div>`)+
-   `<div style="margin-top:8px"><button class="btn alt" data-po="1" style="font-size:13px;padding:6px 10px">${oldOn?"إخفاء الموديلات الأقدم":"عرض الموديلات الأقدم"}</button></div></div>`;
+   `</div>`;
   el.onclick=e=>{ const b=e.target.closest("[data-pm],[data-ps],[data-po]"); if(!b) return;
-    if(b.dataset.po){ oldOn=!oldOn; return drawPend(); }
     if(b.dataset.ps!==undefined){ (st.skip=st.skip||[]).push(nrm(b.dataset.ps)); save(); return drawPend(); }
-    const m=pendList(true).find(x=>nrm(x.name)===nrm(b.dataset.pm)); if(!m) return;
+    const m=pendList().find(x=>nrm(x.name)===nrm(b.dataset.pm)); if(!m) return;
     wzOpen(null,1); const cc=ensureCard(); cc.name=String(m.name).trim(); if(+m.qty>0) cc.qty=+m.qty; save(); wzDraw(); };
 }
 
