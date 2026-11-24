@@ -1217,6 +1217,9 @@ function tots(){ const c=W.card,h=c.sh,t=shTot(c); const hp=$("#hp"); if(hp){ co
  h.blocks.forEach((b,bi)=>{ const k=blkCalc(b,t.ppp),pl=k.pl,el=document.querySelector(`[data-bt="${bi}"]`); if(!el) return; const B=x=>`<bdi dir="ltr">${x}</bdi>`; let s=`${B(pl)} طية`+(t.ppp||k.rq?` · ${B(k.pcs)} قطعة`+(k.rq>0?` (منها ${B("REST "+k.rq)})`:""):""); if(pl>0&&k.gross>0){ s+=`<br>كلغ/طية: ${B(k.perPly.toFixed(3))}`+(k.top>0?` · ${B("TOP")}: ${B(k.top.toFixed(3))} كلغ/قطعة`:"")+(k.pricePc>0?` · ${B(k.pricePc.toFixed(2))} د/قطعة`:""); } el.innerHTML=s; });
  if($("#s1")&&W.step===2){ $("#s1").textContent=t.pl;$("#s2").textContent=t.ppp||t.rq?t.pcs:"—";$("#s3").textContent=c.price>0?(t.pcs*c.price).toLocaleString("fr-FR",{maximumFractionDigits:2}):"—";$("#s4").textContent=t.kl.toFixed(1); } }
 // 3: التقرير
+function stkKeys(c){ const k=[]; c.sh.blocks.forEach(b=>{ const s=b.sid||b.src||"?"; if(!k.includes(s)) k.push(s); }); return k; }
+function stkLetter(c,b){ const k=stkKeys(c); return k.length>1?String.fromCharCode(65+k.indexOf(b.sid||b.src||"?")):""; }
+function stkTag(c,b){ const L=stkLetter(c,b); if(!L) return ""; return (L+" · "+String(b.fourn||b.tissu||b.src||"").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,"").trim()).slice(0,18); }
 function groups(c){ const m={}; c.sh.blocks.forEach(b=>{ const k=b.sid||b.src||"?"; const g=m[k]||(m[k]={sid:k,fourn:b.fourn,tissu:b.tissu,date:b.sdate,prix:b.prix,unite:b.unite,kl:0,n:0}); b.rolls.filter(r=>r.on!==false).forEach(r=>{ g.kl+=+r.l||0; g.n++; }); }); return Object.values(m); }
 // جدول واحد سفلي: قسم الكيلو (لكل لون) + قسم المتابعة (Coupe/Groupe/...)
 const KCOLS=[100,160,110,110,90,100,90,90],KHD=["COLOR","KILO","PLI","KG/PLI","PIÈCES","KG/PIÈCE","DH/PIÈCE","COÛT"],SHD=["","Nom","Date de début","Date de fin","Nb de jours","Nb de pièces","Prix","Total"];
@@ -1227,7 +1230,7 @@ function bottomData(c){ const h=c.sh,t=shTot(c),ppp=t.ppp,v=(x,ok,d)=>ok?x.toFix
 function infoTable(c,gr,stockTot,lt){ const h=c.sh,t=shTot(c),ppp=t.ppp,bl=h.blocks.filter(b=>onR(b).length),f=(x,ok,d)=>ok?x.toFixed(d):"";
  const rows=bl.map(b=>{ const k=blkCalc(b,ppp); return {key:b.sid||b.src||"?",name:lt(b.name),hex:b.hex,v:[String(onR(b).length),k.gross.toFixed(2),f(k.perPly,k.pl>0,3),f(k.top,k.top>0,3),f(k.pricePc,k.pricePc>0,2),f(k.cost,k.cost>0,2)]}; });
  const items=[{t:"cols",h:28}];
- gr.forEach(g=>{ const u=lt(g.unite)||"KL",tot=stockTot(g); items.push({t:"bar",h:34,a:[lt(g.fourn),lt(g.tissu)].filter(Boolean).join("  ·  "),b:[lt(g.date),g.prix?g.prix+" / "+u:""].filter(Boolean).join("  ·  ")}); rows.filter(r=>r.key===g.sid).forEach(r=>items.push({t:"row",h:30,r})); items.push({t:"foot",h:26,a:"STOCK TISSU",b:tot.kl.toFixed(2)+" "+u+" / "+tot.n+" ROLLOS"}); });
+ gr.forEach((g,gi)=>{ const u=lt(g.unite)||"KL",tot=stockTot(g); items.push({t:"bar",h:34,a:((gr.length>1?String.fromCharCode(65+gi)+"  ·  ":"")+[lt(g.fourn),lt(g.tissu)].filter(Boolean).join("  ·  ")),b:[lt(g.date),g.prix?g.prix+" / "+u:""].filter(Boolean).join("  ·  ")}); rows.filter(r=>r.key===g.sid).forEach(r=>items.push({t:"row",h:30,r})); items.push({t:"foot",h:26,a:"STOCK TISSU",b:tot.kl.toFixed(2)+" "+u+" / "+tot.n+" ROLLOS"}); });
  items.push({t:"tot",h:32,v:[String(t.n),t.kl.toFixed(2),f(t.perPly,t.pl>0,3),f(t.top,t.top>0,3),f(t.pricePc,t.pricePc>0,2),f(t.cost,t.cost>0,2)]});
  return {items,H:items.reduce((a,i)=>a+i.h,0)}; }
 const ICW=[88,34,52,54,56,56,62],ICH=["COLOR","ROL.","KILO","KG/PLI","KG/PIÈCE","DH/PIÈCE","COÛT"];
@@ -1265,7 +1268,7 @@ function sheetHTML(c){ const h=c.sh,t=shTot(c),gr=groups(c),ppp=t.ppp,K=1.815,P=
   let y=544; const rp=RH*K,rs=Math.min(9,RH*.43);
   pg.forEach(it=>{ const b=it.b,on=it.on,bhp=it.bh*K;
    o+=`<i style="position:absolute;background:${E(b.hex||"#999")};left:${211-DX}px;top:${y+5-DY}px;width:18px;height:${bhp-9}px"></i>`;
-   T(lt(b.name),237,358,y+20,8.5,1,"l"); 
+   { const tg=stkTag(c,b); if(tg){ T(lt(b.name),237,358,y+13,8.5,1,"l"); T(tg,237,358,y+26,6.5,0,"l"); } else T(lt(b.name),237,358,y+20,8.5,1,"l"); }
    on.forEach((r,i)=>{ const yc=y+i*rp+rp/2; T(b.rolls.indexOf(r)+1,360,411,yc,rs,0,"c"); T(Number(r.l).toFixed(2),411,462,yc,rs,0,"c"); T(r.p||"",462,494,yc,rs,0,"c"); if(+r.q>0) T(r.q,494,514,yc,rs*.85,1,"c"); });
    const pl=on.reduce((s,r)=>s+(+r.p||0),0); if(pl>0){ T(pl,514,566,y+bhp/2,11,1,"c"); { const rqb=on.reduce((s,r)=>s+(+r.q||0),0); if(ppp||rqb) T(pl*ppp+rqb,566,617,y+bhp/2,11,1,"c"); } }
    { const bi=h.blocks.indexOf(b); Z(514,y,566,y+bhp,"b:"+bi,"rgba(242,201,76,.35)"); on.forEach((r,i)=>{ Z(462,y+i*rp,494,y+i*rp+rp,"r:"+bi+":"+b.rolls.indexOf(r),"rgba(242,201,76,.14)"); Z(494,y+i*rp,514,y+i*rp+rp,"q:"+bi+":"+b.rolls.indexOf(r),"rgba(120,160,230,.18)"); }); }
@@ -1385,7 +1388,7 @@ function reportPdf(c){ if(!window.jspdf) return toast("PDF غير جاهز");
  pages.forEach((pg,pi)=>{ if(pi) doc.addPage(); frame(); let y=Y(BT);
   pg.forEach(it=>{ const b=it.b,on=it.on,bh=it.bh;
    try{ doc.setFillColor(b.hex||"#999999"); }catch(e){ doc.setFillColor(153); } doc.rect(X(211),y+2.7,X(229)-X(211),bh-5.4,"F"); doc.setFillColor(0);
-   tp(lt(b.name),237,y+11,8.5,1,"l",X(118));
+   { const tg=stkTag(c,b); if(tg){ tp(lt(b.name),237,y+8,8.5,1,"l",X(118)); tp(tg,237,y+18,6.5,0,"l",X(118)); } else tp(lt(b.name),237,y+11,8.5,1,"l",X(118)); }
    on.forEach((r,i)=>{ const by=y+i*RH+RH*.655,rs=Math.min(9,RH*.43); tp(String(b.rolls.indexOf(r)+1),385.5,by,rs,0,"c"); tp(Number(r.l).toFixed(2),436.5,by,rs,0,"c"); if(r.p) tp(String(r.p),478,by,rs,0,"c"); if(+r.q>0) tp(String(r.q),504,by,rs*.85,1,"c"); });
    const pl=on.reduce((s,r)=>s+(+r.p||0),0); if(pl>0){ tp(String(pl),540,y+bh/2+4,11,1,"c"); { const rqb=on.reduce((s,r)=>s+(+r.q||0),0); if(ppp||rqb) tp(String(pl*ppp+rqb),591.5,y+bh/2+4,11,1,"c"); } }
    y+=bh; doc.setLineWidth(1); doc.line(X(T0),y,X(617),y); });
