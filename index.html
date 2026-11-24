@@ -931,6 +931,14 @@ function vMenu(){
   <style>.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.mtile{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 10px;display:flex;flex-direction:column;align-items:center;gap:5px;font:inherit;cursor:pointer;text-align:center;min-height:124px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.mtile:active{transform:scale(.97)}.mtile:first-child{grid-column:1/-1}.mtile .mi{font-size:32px;line-height:1}.mtile b{font-size:16px;color:var(--navy)}.mtile small{font-size:12px;color:var(--mut)}@media(min-width:700px){.mgrid{grid-template-columns:repeat(3,1fr)}.mtile:first-child{grid-column:auto}}</style>`;
   view.oninput=null; view.onchange=null; view.onclick=e=>{ if(e.target.id==="thm"){ const n=isDark()?"light":"dark"; try{localStorage.setItem("rapport-theme",n)}catch(x){} document.documentElement.setAttribute("data-theme",n); return vMenu(); } const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
 }
+/* ---------- مزامنة اسم الموديل مع نظام التقطيع ---------- */
+function renameSync(m,old){ const ok=String(old).trim().toLowerCase(), msg={stk:"rename",mid:m.uid||"",cid:m.cid||"",old:old,name:m.name};
+  st.models.forEach(x=>{ if(x!==m&&String(x.name||"").trim().toLowerCase()===ok) x.name=m.name; }); // نفس الموديل في مجموعات أخرى
+  const f=document.getElementById("stk"); if(f&&f.contentWindow){ f.contentWindow.postMessage(msg,location.origin); return; }
+  try{ const raw=localStorage.getItem("systeme-coupe-v1"); if(!raw) return; const d=JSON.parse(raw); let ch=false; (d.cards||[]).forEach(c=>{ const byId=(msg.mid&&c.mid===msg.mid)||(msg.cid&&c.id===msg.cid), byNm=!c.mid&&String(c.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&c.name!==msg.name){ c.name=msg.name; ch=true; } }); if(ch) localStorage.setItem("systeme-coupe-v1",JSON.stringify(d)); }catch(e){} }
+addEventListener("message",e=>{ const d=e.data; if(e.origin!==location.origin||!d||d.stk!=="rename") return; const ok=String(d.old||"").trim().toLowerCase(); let ch=false;
+  st.models.forEach(m=>{ const byId=(d.mid&&m.uid===d.mid)||(d.cid&&m.cid===d.cid), byNm=ok&&String(m.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&m.name!==d.name){ m.name=d.name; ch=true; } });
+  if(ch){ save(); if(tab==="models"&&!(document.activeElement&&document.activeElement.tagName==="INPUT")) vModels(); } });
 /* ---------- اختيار الطلبية من طلبيات التقطيع (قراءة فقط من ملخص يكتبه نظام التقطيع) ---------- */
 function stkOrders(){ try{ const a=JSON.parse(localStorage.getItem("stk:orders")||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 const nrmN=v=>String(v==null?"":v).trim().toLowerCase();
@@ -1130,7 +1138,7 @@ function vModels(){
     <div class="bar"><button class="btn" data-close="1">تم</button><button class="btn del" data-del="${i}">حذف الطلبية</button></div></div></div>`; }
   view.innerHTML=h;
   const keepQ=()=>{ const el=$("#mq"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } };
-  view.oninput=e=>{ const t=e.target; if(t.id==="mq"){ mQ=t.value; vModels(); keepQ(); return; } const c=t.closest(".mcard"); if(!c||!t.dataset.f) return; st.models[+c.dataset.i][t.dataset.f]=t.value; save(); };
+  view.oninput=e=>{ const t=e.target; if(t.id==="mq"){ mQ=t.value; vModels(); keepQ(); return; } const c=t.closest(".mcard"); if(!c||!t.dataset.f) return; const mm=st.models[+c.dataset.i], old=mm.name; mm[t.dataset.f]=t.value; if(t.dataset.f==="name"&&String(old||"").trim()&&old!==t.value) renameSync(mm,old); save(); };
   view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(t.id==="stkPick"&&c){ const o=stkOrders()[+t.value], k=+c.dataset.i; if(o&&st.models[k]){ const mm=st.models[k]; mm.name=o.name; mm.cid=o.id; if(!(Number(mm.stage)>=1)){ mm.stage=1; mm.stageDate=st.today||""; mm.hist=mm.hist||{}; mm.hist[1]=st.today||""; } if(o.date) mm.cutEnd=o.date; mm.cutPush=0; if(!num(mm.qty)){ const r=stkRemain(o,k); mm.qty=r?String(r):""; } save(); vModels(); } return; } if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
   view.onclick=e=>{ const t=e.target, d=t.dataset, ed=t.closest&&t.closest("[data-edit]");
     if(d.push!==undefined){ const m=st.models[+d.push]; if(m){ m.cutPush=m.cutPush?0:1; save(); alert_(m.cutPush?"دُفعت الطلبية إلى التقطيع":"أُلغي الدفع"); vModels(); } return; }

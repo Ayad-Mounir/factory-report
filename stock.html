@@ -1053,7 +1053,17 @@ let st={cards:[]},delId=null;
 try{const r=localStorage.getItem(KEY);if(r)st=JSON.parse(r)}catch(e){}
 let usedC=null;
 const syncSum=()=>{ try{ localStorage.setItem("stk:orders",JSON.stringify(st.cards.map(c=>{ const t=shTot(c); return {id:c.id,name:String(c.name||"").trim(),pcs:t?t.pcs:0,date:c.date||""}; }).filter(x=>x.name))); }catch(e){} };
-const save=()=>{usedC=null;try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast("تعذر الحفظ")} syncSum();};
+const _nm={};
+const save=()=>{usedC=null;try{localStorage.setItem(KEY,JSON.stringify(st))}catch(e){toast("تعذر الحفظ")} syncSum(); try{ trackNames(); }catch(e){} };
+// ---- مزامنة اسم الموديل مع التقرير الشامل (الربط بالمعرّف: mid/cid، وبالاسم للقديم غير المربوط) ----
+function trackNames(){ (st.cards||[]).forEach(c=>{ const o=_nm[c.id]; _nm[c.id]=c.name; if(o!==undefined&&o!==c.name&&String(o).trim()) propName(c,o); }); }
+function renameModels(L,msg){ let ch=false; const ok=String(msg.old||"").trim().toLowerCase(); (L||[]).forEach(m=>{ if(!m) return; const byId=(msg.mid&&m.uid===msg.mid)||(msg.cid&&m.cid===msg.cid), byNm=ok&&String(m.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&m.name!==msg.name){ m.name=msg.name; ch=true; } }); return ch; }
+function propName(c,old){ const msg={stk:"rename",cid:c.id,mid:c.mid||"",old:old,name:c.name};
+  if(window.parent&&window.parent!==window) window.parent.postMessage(msg,location.origin);
+  else { let o=null; try{ o=JSON.parse(localStorage.getItem("rapport-usine-v1")||"null"); }catch(e){} if(o&&Array.isArray(o.models)&&renameModels(o.models,msg)) try{ localStorage.setItem("rapport-usine-v1",JSON.stringify(o)); }catch(e){} } }
+window.addEventListener("message",e=>{ const d=e.data; if(e.origin!==location.origin||!d||d.stk!=="rename") return; const ok=String(d.old||"").trim().toLowerCase(); let ch=false;
+  st.cards.forEach(c=>{ const byId=(d.mid&&c.mid===d.mid)||(d.cid&&c.id===d.cid), byNm=!c.mid&&ok&&String(c.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&c.name!==d.name){ c.name=d.name; _nm[c.id]=d.name; ch=true; } });
+  if(ch){ save(); try{ drawPend(); }catch(x){} try{ if(typeof render==="function") render(); }catch(x){} } });
 function usedAll(){ if(usedC) return usedC; const m={}; st.cards.forEach(c=>{ if(!c.sh) return; c.sh.blocks.forEach(b=>{ if(!b.sid||b.ci===undefined) return; b.rolls.forEach((r,ri)=>{ if(r.on!==false&&!m[b.sid+":"+b.ci+":"+ri]) m[b.sid+":"+b.ci+":"+ri]={name:c.name||"طلبية بلا اسم",id:c.id}; }); }); }); return usedC=m; }
 window.FAB_USED=(sid,ci,ri)=>{ const u=usedAll()[sid+":"+ci+":"+ri]; return u?u.name:""; };
 const num=v=>{const n=parseFloat(String(v).replace(",",".").replace(/\s/g,""));return isFinite(n)?n:null};
@@ -1505,7 +1515,7 @@ const _rf=()=>{ try{ drawPend(); }catch(e){} };
 window.addEventListener("storage",e=>{ if(!e.key||e.key===MAINKEY) _rf(); });
 window.addEventListener("focus",_rf); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) _rf(); });
 let _pl=localStorage.getItem(MAINKEY); setInterval(()=>{ const n=localStorage.getItem(MAINKEY); if(n!==_pl){ _pl=n; if(!(document.activeElement&&document.activeElement.id==="pendQ")) _rf(); } },2000);
-syncSum();
+syncSum(); st.cards.forEach(c=>{ _nm[c.id]=c.name; });
 show("fab");
 })();
 </script>
