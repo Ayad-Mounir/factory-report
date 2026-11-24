@@ -823,7 +823,9 @@ if(!st||!st.v||st.rev!==window.DEFAULT_STATE.rev){
   } else st=JSON.parse(JSON.stringify(window.DEFAULT_STATE));
   try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){}
 }
-const save=()=>{ try{ migStg(); } catch(e){} try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){} };
+const newUid=()=>"m"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const save=()=>{ try{ migStg(); } catch(e){} try{ (st.models||[]).forEach(m=>{ if(m&&!m.uid) m.uid=newUid(); }); }catch(e){} try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){} };
+try{ save(); }catch(e){}
 const $=s=>document.querySelector(s);
 const view=$("#view");
 const MONTHS=["يناير","فبراير","مارس","أبريل","ماي","يونيو","يوليوز","غشت","شتنبر","أكتوبر","نونبر","دجنبر"];
@@ -932,9 +934,9 @@ function vMenu(){
 /* ---------- اختيار الطلبية من طلبيات التقطيع (قراءة فقط من ملخص يكتبه نظام التقطيع) ---------- */
 function stkOrders(){ try{ const a=JSON.parse(localStorage.getItem("stk:orders")||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 const nrmN=v=>String(v==null?"":v).trim().toLowerCase();
-function stkRemain(o,exI){ const k=nrmN(o.name), cur=st.models[exI]||{}, g=nrmN(cur.g); const used=g?st.models.reduce((a,m,j)=>a+(j!==exI&&nrmN(m.name)===k&&nrmN(m.g)===g?(num(m.qty)||0):0),0):0; return Math.max(0,(+o.pcs||0)-used); } // الطلبية تُأخذ مرة لكل مجموعة: الخصم فقط من نفس المجموعة، ومجموعة أخرى تأخذ الكمية كاملة
+function stkRemain(o,exI){ const k=nrmN(o.name), cur=st.models[exI]||{}, g=nrmN(cur.g); const same=m=>m.cid?m.cid===o.id:nrmN(m.name)===k; const used=g?st.models.reduce((a,m,j)=>a+(j!==exI&&same(m)&&nrmN(m.g)===g?(num(m.qty)||0):0),0):0; return Math.max(0,(+o.pcs||0)-used); } // الطلبية تُأخذ مرة لكل مجموعة: الخصم فقط من نفس المجموعة، ومجموعة أخرى تأخذ الكمية كاملة
 function stkPickHtml(i,m){ const L=stkOrders(), cur=nrmN(m.name);
- return `<label class="span2">اختر من طلبيات التقطيع<select id="stkPick"><option value="">${L.length?"— اختر طلبية من التقطيع —":"لا طلبيات تقطيع بعد (أنشئها من «المخزون»)"}</option>${L.map((o,j)=>`<option value="${j}" ${nrmN(o.name)===cur?"selected":""}>${esc(o.name)} · ${fa(+o.pcs||0)} ق · المتبقي ${fa(stkRemain(o,i))}</option>`).join("")}</select></label>`; }
+ return `<label class="span2">اختر من طلبيات التقطيع<select id="stkPick"><option value="">${L.length?"— اختر طلبية من التقطيع —":"لا طلبيات تقطيع بعد (أنشئها من «المخزون»)"}</option>${L.map((o,j)=>`<option value="${j}" ${(m.cid?m.cid===o.id:nrmN(o.name)===cur)?"selected":""}>${esc(o.name)} · ${fa(+o.pcs||0)} ق · المتبقي ${fa(stkRemain(o,i))}</option>`).join("")}</select></label>`; }
 /* ---------- المخزون (نظام التقطيع في صفحة مستقلة stock.html، بملء الشاشة) ---------- */
 let _stkFit=null;
 addEventListener("message",e=>{ if(e.origin===location.origin&&e.data&&e.data.stk==="menu") go("menu"); });
@@ -1129,7 +1131,7 @@ function vModels(){
   view.innerHTML=h;
   const keepQ=()=>{ const el=$("#mq"); if(el){ el.focus(); const n=el.value.length; try{ el.setSelectionRange(n,n); }catch(_){} } };
   view.oninput=e=>{ const t=e.target; if(t.id==="mq"){ mQ=t.value; vModels(); keepQ(); return; } const c=t.closest(".mcard"); if(!c||!t.dataset.f) return; st.models[+c.dataset.i][t.dataset.f]=t.value; save(); };
-  view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(t.id==="stkPick"&&c){ const o=stkOrders()[+t.value], k=+c.dataset.i; if(o&&st.models[k]){ const mm=st.models[k]; mm.name=o.name; if(!(Number(mm.stage)>=1)){ mm.stage=1; mm.stageDate=st.today||""; mm.hist=mm.hist||{}; mm.hist[1]=st.today||""; } if(o.date) mm.cutEnd=o.date; mm.cutPush=0; if(!num(mm.qty)){ const r=stkRemain(o,k); mm.qty=r?String(r):""; } save(); vModels(); } return; } if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
+  view.onchange=e=>{ const t=e.target, c=t.closest&&t.closest(".mcard"); if(t.id==="stkPick"&&c){ const o=stkOrders()[+t.value], k=+c.dataset.i; if(o&&st.models[k]){ const mm=st.models[k]; mm.name=o.name; mm.cid=o.id; if(!(Number(mm.stage)>=1)){ mm.stage=1; mm.stageDate=st.today||""; mm.hist=mm.hist||{}; mm.hist[1]=st.today||""; } if(o.date) mm.cutEnd=o.date; mm.cutPush=0; if(!num(mm.qty)){ const r=stkRemain(o,k); mm.qty=r?String(r):""; } save(); vModels(); } return; } if(c&&t.dataset.f){ st.models[+c.dataset.i][t.dataset.f]=t.value; save(); } };
   view.onclick=e=>{ const t=e.target, d=t.dataset, ed=t.closest&&t.closest("[data-edit]");
     if(d.push!==undefined){ const m=st.models[+d.push]; if(m){ m.cutPush=m.cutPush?0:1; save(); alert_(m.cutPush?"دُفعت الطلبية إلى التقطيع":"أُلغي الدفع"); vModels(); } return; }
     if(d.close&&(t.classList.contains("ebg")||t.tagName==="BUTTON")){ const cm=st.models[mEdit]; if(cm&&isEmptyM(cm)){ st.models.splice(mEdit,1); save(); alert_("حُذفت الطلبية الفارغة"); } mEdit=null; return vModels(); }

@@ -1430,30 +1430,33 @@ function mainModels(){ try{ const o=JSON.parse(localStorage.getItem(MAINKEY)||"n
 const mCreated=m=>String((m.hist&&m.hist[0])||m.cutEnd||"").slice(0,10);
 const nrm=s=>String(s==null?"":s).trim().toLowerCase();
 function pendBase(){ let o=null; try{ o=JSON.parse(localStorage.getItem(MAINKEY)||"null"); }catch(e){} return (o&&Array.isArray(o.models))?o:null; }
-function pendList(){ // = موديلات التقرير في مرحلة «التقطيع» تلقائياً + أي موديل «دُفع للتقطيع» يدوياً من التقرير
+// الربط: بمعرّف الموديل (uid) أو بمعرّف بطاقة التقطيع (cid) — لا يتأثر بتغيير الاسم؛ وبالاسم فقط للطلبيات القديمة غير المربوطة
+function hasRep(m){ if(m.uid&&st.cards.some(c=>c.mid===m.uid)) return true; if(m.cid&&st.cards.some(c=>c.id===m.cid)) return true; if(m.uid||m.cid){ if(st.cards.some(c=>c.mid&&c.mid===m.uid)) return true; } return st.cards.some(c=>!c.mid&&!m.cid&&nrm(c.name)===nrm(m.name)); }
+function pendList(){ // كل طلبيات التقرير بلا تقرير — الطلبية بنفس الاسم لأكثر من مجموعة تظهر مرة واحدة
   const o=pendBase(); if(!o) return [];
-  const mig=o.stgv===2, today=String(o.today||"").slice(0,10)||new Date().toISOString().slice(0,10), skip=st.skip||[];
-  return o.models.filter(m=>{ if(!nrm(m.name)) return false; if(st.cards.some(c=>nrm(c.name)===nrm(m.name))) return false;
-    if(skip.includes(nrm(m.name))) return false; return true; }); }
+  const mp=new Map();
+  o.models.forEach(m=>{ const k=nrm(m.name); if(!k) return; if(!mp.has(k)) mp.set(k,[]); mp.get(k).push(m); });
+  const out=[];
+  mp.forEach((L,k)=>{ if(L.some(hasRep)||st.cards.some(c=>nrm(c.name)===k)) return; const m=Object.assign({},L[0]); m._gs=L.map(x=>x.g).filter(g=>g!==undefined&&g!==null&&String(g)!=="").filter((g,i,a)=>a.indexOf(g)===i); m._q=L.reduce((a,x)=>Math.max(a,+x.qty||0),0); out.push(m); });
+  return out; }
 function stgLbl(m){ const S=["التقطيع","المجموعة","النضافة","سبيسيال","بلانشا","لومبلاج","مسلَّم"], o=pendBase()||{}; if(m.end) return "منتهية"; if(m.stage===undefined||m.stage===""||m.stage===null) return "—"; const k=Number(m.stage)+(o.stgv===2?0:1); return S[k]||"—"; }
-function pendOther(){ const o=pendBase(); if(!o) return []; const P=pendList().map(m=>nrm(m.name)), seen=new Set();
-  return o.models.filter(m=>{ const k=nrm(m.name); if(!k||P.includes(k)||seen.has(k)||st.cards.some(c=>nrm(c.name)===k)) return false; seen.add(k); return true; }); }
+function pendOther(){ return []; } // كل الطلبيات بلا تقرير صارت في القائمة الرئيسية
 function drawPend(){
   const P=pendList(), N=P.length, el=$("#pendMain"), bn=$("#pendBanner"), tb=document.querySelector('[data-nav="orders"]');
   if(tb) tb.textContent="📋 الطلبيات"+(N?" ("+N+")":"");
   if(bn){ bn.hidden=!N; bn.innerHTML=N?`🔔 ${N} طلبية بدون تقرير ← افتح «الطلبيات»`:""; bn.style.cssText="background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:9px 12px;margin:8px 0;font-size:14px;cursor:pointer"; bn.onclick=()=>show("orders"); }
   if(!el) return;
   el.innerHTML=`<div class="card" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px"><h3 style="margin:0 0 4px;font-size:15px">📥 طلبيات بدون تقرير (جارية أو منتهية)${P.length?" ("+P.length+")":""}</h3>`+
-   (P.length?P.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${stgLbl(m)}${m.g?" · مجموعة "+esc(m.g):""}${+m.qty>0?" · "+f(+m.qty)+" قطعة":""}</div></div><div style="display:flex;gap:6px;flex:none"><button class="btn gold primary" data-pm="${esc(m.name)}">📝 تقرير غير مكتمل</button><button class="btn alt" data-ps="${esc(m.name)}">تجاهل</button></div></div>`).join(""):`<div style="color:var(--mut);font-size:14px;padding-top:6px">لا توجد طلبيات جديدة بانتظار التقطيع.</div>`)+
+   (P.length?P.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${stgLbl(m)}${m._gs&&m._gs.length?" · "+(m._gs.length>1?"المجموعات ":"مجموعة ")+m._gs.map(esc).join(" و "):(m.g?" · مجموعة "+esc(m.g):"")}${(m._q||+m.qty)>0?" · "+f(m._q||+m.qty)+" قطعة":""}</div></div><div style="display:flex;gap:6px;flex:none"><button class="btn gold primary" data-pm="${esc(m.uid||m.name)}">📝 تقرير غير مكتمل</button></div></div>`).join(""):`<div style="color:var(--mut);font-size:14px;padding-top:6px">لا توجد طلبيات جديدة بانتظار التقطيع.</div>`)+
    `</div>`+
    `<details class="card" id="pendOth" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px"${window._pOpen===false?"":" open"}><summary style="cursor:pointer;font-weight:700;font-size:15px">📂 كل طلبيات التقرير (حتى المسلَّمة) · أكمل تقريرها</summary><input id="pendQ" placeholder="بحث باسم الموديل…" value="${esc(window._pQ||"")}" style="width:100%;margin:8px 0;padding:9px;border:1px solid var(--line);border-radius:8px"><div id="pendOL"></div></details>`;
   const fillO=()=>{ const q=nrm(window._pQ||""), L=pendOther().filter(m=>!q||nrm(m.name).includes(q)).slice(0,60), box=$("#pendOL"); if(!box) return;
-    box.innerHTML=L.length?L.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${stgLbl(m)}${m.g?" · مجموعة "+esc(m.g):""}${+m.qty>0?" · "+f(+m.qty)+" قطعة":""}</div></div><button class="btn alt" data-pm="${esc(m.name)}" data-oth="1">📝 تقرير غير مكتمل</button></div>`).join(""):`<div style="color:var(--mut);font-size:14px">لا نتائج.</div>`; };
-  fillO(); const d=$("#pendOth"); d.ontoggle=()=>{ window._pOpen=d.open; }; $("#pendQ").oninput=e=>{ window._pQ=e.target.value; fillO(); };
+    box.innerHTML=L.length?L.map(m=>`<div style="display:flex;gap:8px;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:0"><b>${esc(m.name)}</b><div style="color:var(--mut);font-size:13px">${stgLbl(m)}${m.g?" · مجموعة "+esc(m.g):""}${+m.qty>0?" · "+f(+m.qty)+" قطعة":""}</div></div><button class="btn alt" data-pm="${esc(m.uid||m.name)}" data-oth="1">📝 تقرير غير مكتمل</button></div>`).join(""):`<div style="color:var(--mut);font-size:14px">لا نتائج.</div>`; };
+  fillO(); const d=$("#pendOth"); d.hidden=!pendOther().length; d.ontoggle=()=>{ window._pOpen=d.open; }; $("#pendQ").oninput=e=>{ window._pQ=e.target.value; fillO(); };
   el.onclick=e=>{ const b=e.target.closest("[data-pm],[data-ps],[data-po]"); if(!b) return;
     if(b.dataset.ps!==undefined){ (st.skip=st.skip||[]).push(nrm(b.dataset.ps)); save(); return drawPend(); }
-    const m=pendList().concat(pendOther()).find(x=>nrm(x.name)===nrm(b.dataset.pm)); if(!m) return;
-    wzOpen(null,1); const cc=ensureCard(); cc.name=String(m.name).trim(); if(+m.qty>0) cc.qty=+m.qty; save(); wzDraw(); };
+    const key=b.dataset.pm, m=pendList().concat(pendOther()).find(x=>(x.uid&&x.uid===key)||(!x.uid&&nrm(x.name)===nrm(key))); if(!m) return;
+    wzOpen(null,1); const cc=ensureCard(); cc.name=String(m.name).trim(); cc.mid=m.uid||""; if((m._q||+m.qty)>0) cc.qty=m._q||+m.qty; save(); wzDraw(); };
 }
 
 const _rf=()=>{ try{ drawPend(); }catch(e){} };
