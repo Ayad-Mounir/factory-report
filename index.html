@@ -932,19 +932,24 @@ function vMenu(){
   view.oninput=null; view.onchange=null; view.onclick=e=>{ if(e.target.id==="thm"){ const n=isDark()?"light":"dark"; try{localStorage.setItem("rapport-theme",n)}catch(x){} document.documentElement.setAttribute("data-theme",n); return vMenu(); } const b=e.target.closest("[data-go]"); if(b) go(b.dataset.go); };
 }
 /* ---------- مزامنة اسم الموديل مع نظام التقطيع ---------- */
-function renameSync(m,old){ const ok=String(old).trim().toLowerCase(), msg={stk:"rename",mid:m.uid||"",cid:m.cid||"",old:old,name:m.name};
-  st.models.forEach(x=>{ if(x!==m&&String(x.name||"").trim().toLowerCase()===ok) x.name=m.name; }); // نفس الموديل في مجموعات أخرى
+const ordD=m=>String((m&&(m.cutEnd||(m.hist&&m.hist[0])||m.stageDate||m.start))||"").slice(0,10);
+function applyRename(L,msg){ let ch=false; const ok=String(msg.old||"").trim().toLowerCase(), nq=x=>String(x.name||"").trim().toLowerCase()===ok;
+  const ids=L.filter(x=>x&&((msg.mid&&x.uid===msg.mid)||(msg.cid&&x.cid===msg.cid))); let tg=[];
+  if(ids.length){ const ds=new Set(ids.map(ordD)); tg=L.filter(x=>x&&(ids.includes(x)||(ok&&nq(x)&&ds.has(ordD(x))))); } // نفس الطلبية في مجموعات أخرى = نفس الاسم ونفس التاريخ
+  else if(ok){ const c=L.filter(x=>x&&nq(x)); if(c.length===1) tg=c; }
+  tg.forEach(x=>{ if(x.name!==msg.name){ x.name=msg.name; ch=true; } }); return ch; }
+function renameSync(m,old){ const ok=String(old).trim().toLowerCase(), nq=x=>String(x.name||"").trim().toLowerCase()===ok, d=ordD(m);
+  st.models.forEach(x=>{ if(x!==m&&nq(x)&&ordD(x)===d) x.name=m.name; }); // نفس الطلبية (نفس التاريخ) في مجموعات أخرى
+  const uq=!st.models.some(x=>x!==m&&nq(x)), msg={stk:"rename",mid:m.uid||"",cid:m.cid||"",old:old,name:m.name,uq:uq};
   const f=document.getElementById("stk"); if(f&&f.contentWindow){ f.contentWindow.postMessage(msg,location.origin); return; }
-  try{ const raw=localStorage.getItem("systeme-coupe-v1"); if(!raw) return; const d=JSON.parse(raw); let ch=false; (d.cards||[]).forEach(c=>{ const byId=(msg.mid&&c.mid===msg.mid)||(msg.cid&&c.id===msg.cid), byNm=!c.mid&&String(c.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&c.name!==msg.name){ c.name=msg.name; ch=true; } }); if(ch) localStorage.setItem("systeme-coupe-v1",JSON.stringify(d)); }catch(e){} }
-addEventListener("message",e=>{ const d=e.data; if(e.origin!==location.origin||!d||d.stk!=="rename") return; const ok=String(d.old||"").trim().toLowerCase(); let ch=false;
-  st.models.forEach(m=>{ const byId=(d.mid&&m.uid===d.mid)||(d.cid&&m.cid===d.cid), byNm=ok&&String(m.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&m.name!==d.name){ m.name=d.name; ch=true; } });
-  if(ch){ save(); if(tab==="models"&&!(document.activeElement&&document.activeElement.tagName==="INPUT")) vModels(); } });
+  try{ const raw=localStorage.getItem("systeme-coupe-v1"); if(!raw) return; const dd=JSON.parse(raw); let ch=false; (dd.cards||[]).forEach(c=>{ const byId=(msg.mid&&c.mid===msg.mid)||(msg.cid&&c.id===msg.cid), byNm=!c.mid&&uq&&String(c.name||"").trim().toLowerCase()===ok; if((byId||byNm)&&c.name!==msg.name){ c.name=msg.name; ch=true; } }); if(ch) localStorage.setItem("systeme-coupe-v1",JSON.stringify(dd)); }catch(e){} }
+addEventListener("message",e=>{ const d=e.data; if(e.origin!==location.origin||!d||d.stk!=="rename") return; if(applyRename(st.models,d)){ save(); if(tab==="models"&&!(document.activeElement&&document.activeElement.tagName==="INPUT")) vModels(); } });
 /* ---------- اختيار الطلبية من طلبيات التقطيع (قراءة فقط من ملخص يكتبه نظام التقطيع) ---------- */
 function stkOrders(){ try{ const a=JSON.parse(localStorage.getItem("stk:orders")||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
 const nrmN=v=>String(v==null?"":v).trim().toLowerCase();
 function stkRemain(o,exI){ const k=nrmN(o.name), cur=st.models[exI]||{}, g=nrmN(cur.g); const same=m=>m.cid?m.cid===o.id:nrmN(m.name)===k; const used=g?st.models.reduce((a,m,j)=>a+(j!==exI&&same(m)&&nrmN(m.g)===g?(num(m.qty)||0):0),0):0; return Math.max(0,(+o.pcs||0)-used); } // الطلبية تُأخذ مرة لكل مجموعة: الخصم فقط من نفس المجموعة، ومجموعة أخرى تأخذ الكمية كاملة
 function stkPickHtml(i,m){ const L=stkOrders(), cur=nrmN(m.name);
- return `<label class="span2">اختر من طلبيات التقطيع<select id="stkPick"><option value="">${L.length?"— اختر طلبية من التقطيع —":"لا طلبيات تقطيع بعد (أنشئها من «المخزون»)"}</option>${L.map((o,j)=>`<option value="${j}" ${(m.cid?m.cid===o.id:nrmN(o.name)===cur)?"selected":""}>${esc(o.name)} · ${fa(+o.pcs||0)} ق · المتبقي ${fa(stkRemain(o,i))}</option>`).join("")}</select></label>`; }
+ return `<label class="span2">اختر من طلبيات التقطيع<select id="stkPick"><option value="">${L.length?"— اختر طلبية من التقطيع —":"لا طلبيات تقطيع بعد (أنشئها من «المخزون»)"}</option>${L.map((o,j)=>`<option value="${j}" ${(m.cid?m.cid===o.id:nrmN(o.name)===cur)?"selected":""}>${esc(o.name)}${o.date?" · "+esc(o.date):""} · ${fa(+o.pcs||0)} ق · المتبقي ${fa(stkRemain(o,i))}</option>`).join("")}</select></label>`; }
 /* ---------- المخزون (نظام التقطيع في صفحة مستقلة stock.html، بملء الشاشة) ---------- */
 let _stkFit=null;
 addEventListener("message",e=>{ if(e.origin===location.origin&&e.data&&e.data.stk==="menu") go("menu"); });
@@ -1117,7 +1122,7 @@ function vModels(){
   <div class="stg" style="margin:0 0 6px">${chip("mg","all","كل المجموعات",mGf)}${G.map(g=>chip("mg",g,"G"+g,mGf)).join("")}</div>
   <div class="stg" style="margin:0 0 10px">${chip("ms","all","الكل",mSf)}${chip("ms","cut","التقطيع",mSf)}${chip("ms","open","جارية",mSf)}${chip("ms","fin","بعد المجموعة",mSf)}${chip("ms","deliv","مسلَّمة",mSf)}${chip("ms","inc","ناقصة",mSf)}</div>
   <div class="note">${fa(rows.length)} طلبية من ${fa(st.models.length)}. الطلبية بلا مجموعة أو ثمن تبقى خارج الحساب. اضغط الطلبية لتعديلها.</div>`;
-  h+=rows.map(({m,i,inf})=>`<div class="orow" data-edit="${i}"><div class="oh"><b>${esc(m.name)||"(بلا اسم)"}</b><span class="bdg ${inf.cls}">${inf.label}</span></div><div class="od"><span class="tag">${m.g?"G"+m.g+" "+esc((st.groups[m.g]||{}).resp||""):"بلا مجموعة"}</span><span>${fa(num(m.qty)||0)} قطعة</span><span>مجموعة ${m.price!==""?fa(num(m.price)||0,2):"—"} د</span><span>بيع ${m.sale!==""?fa(num(m.sale)||0,2):"—"} د</span>${Number(m.stage)===0&&m.stage!==""&&!m.start?`<span>انتهاء التقطيع ${ddm(m.cutEnd)||"؟"}</span>`:`<span>${ddm(m.start)||"؟"} ← ${m.end?ddm(m.end):"جارية"}</span>`}</div>${isEmptyM(m)?`<button class="btn del" data-del="${i}" style="margin-top:6px">حذف الطلبية الفارغة</button>`:""}${Number(m.stage)===0&&m.stage!==""&&!m.start?"":mWarn(m)}</div>`).join("")||'<div class="note">لا طلبيات مطابقة.</div>';
+  h+=rows.map(({m,i,inf})=>`<div class="orow" data-edit="${i}"><div class="oh"><b>${esc(m.name)||"(بلا اسم)"}</b>${(()=>{ const k=nrmN(m.name); return k&&st.models.some(x=>x!==m&&nrmN(x.name)===k&&ordD(x)!==ordD(m))?` <small style="color:var(--mut)">📅 ${esc(ddm(ordD(m))||ordD(m))}</small>`:""; })()}<span class="bdg ${inf.cls}">${inf.label}</span></div><div class="od"><span class="tag">${m.g?"G"+m.g+" "+esc((st.groups[m.g]||{}).resp||""):"بلا مجموعة"}</span><span>${fa(num(m.qty)||0)} قطعة</span><span>مجموعة ${m.price!==""?fa(num(m.price)||0,2):"—"} د</span><span>بيع ${m.sale!==""?fa(num(m.sale)||0,2):"—"} د</span>${Number(m.stage)===0&&m.stage!==""&&!m.start?`<span>انتهاء التقطيع ${ddm(m.cutEnd)||"؟"}</span>`:`<span>${ddm(m.start)||"؟"} ← ${m.end?ddm(m.end):"جارية"}</span>`}</div>${isEmptyM(m)?`<button class="btn del" data-del="${i}" style="margin-top:6px">حذف الطلبية الفارغة</button>`:""}${Number(m.stage)===0&&m.stage!==""&&!m.start?"":mWarn(m)}</div>`).join("")||'<div class="note">لا طلبيات مطابقة.</div>';
   h+=`<button class="ofab" id="addM">+ طلبية</button>`;
   if(mEdit!==null&&st.models[mEdit]){ const m=st.models[mEdit], i=mEdit;
     h+=`<div class="ebg" data-close="1"><div class="esheet"><div class="mh"><b>${esc(m.name)||"طلبية جديدة"}</b><span><button class="btn del" data-del="${i}">حذف</button> <button class="btn alt" data-close="1">إغلاق</button></span></div>
