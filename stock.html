@@ -889,7 +889,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
         <button type="button" data-act="tog" class="sumb" style="width:100%;text-align:start;background:transparent;border:0;font:inherit;color:inherit;padding:2px 0;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b data-sname></b><span data-arr style="font-size:18px">${isOpen ? "▾" : "▸"}</span></div><div data-sdots style="display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0;font-size:12px"></div><div data-stot style="font-size:13px;color:var(--mut)"></div></button>
         <div class="sbody" ${isOpen ? "" : "hidden"} style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
         <div class="row" style="justify-content:space-between;margin:0 0 6px"><strong>ورقة ${si + 1}</strong>
-          <span><button class="small" data-act="up">↑</button> <button class="small" data-act="down">↓</button> <button class="small" data-act="del">حذف</button></span></div>
+          <span><button class="small" data-act="prt">🖨 طباعة</button> <button class="small" data-act="shr">↗ مشاركة</button> <button class="small" data-act="up">↑</button> <button class="small" data-act="down">↓</button> <button class="small" data-act="del">حذف</button></span></div>
         <div class="prev" style="position:relative;overflow:hidden;border:1px solid var(--line);border-radius:6px;background:#fff;margin:6px 0 8px"></div>
         <div class="selbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px"></div>
         <button type="button" class="small" data-act="edt" style="width:100%">${edOpen.has(s.id || si) ? "▴ إخفاء التعديل" : "✎ تعديل المخزون"}</button>
@@ -1000,6 +1000,13 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
       S2.clear(); refresh(d2, si2); return; }
     if (a === "edt") { const d1 = e.target.closest(".card"), s1 = sheets[+d1.dataset.si], k1 = s1.id || +d1.dataset.si; edOpen.has(k1) ? edOpen.delete(k1) : edOpen.add(k1); d1.querySelector("[data-edwrap]").hidden = !edOpen.has(k1); e.target.textContent = edOpen.has(k1) ? "▴ إخفاء التعديل" : "✎ تعديل المخزون"; return; }
     if (a === "edr") { const bx = e.target.closest(".color").querySelector("[data-ed]"); bx.hidden = !bx.hidden; return; }
+    if (a === "prt" || a === "shr") { const d3 = e.target.closest(".card"), m3 = model()[+d3.dataset.si]; if (!m3 || !m3.colors.length) { alert("لا توجد بيانات"); return; }
+      let blob; try { blob = window.buildPdf([m3]).output("blob"); } catch (er) { alert("تعذر إنشاء PDF"); return; }
+      const nm = (String(m3.tissu || m3.fournisseur || "stock").replace(/[^\w\u0600-\u06FF-]+/g, "_") || "stock") + ".pdf", f = new File([blob], nm, { type: "application/pdf" });
+      const dl = () => { const u = URL.createObjectURL(blob), l = document.createElement("a"); l.href = u; l.download = nm; l.click(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+      if (a === "shr") { if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f], title: nm }).catch(() => {}); else dl(); }
+      else { const u = URL.createObjectURL(blob), w = window.open(u, "_blank"); if (!w) dl(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
+      return; }
     const d = e.target.closest(".card"); const si = +d.dataset.si; const s = sheets[si];
     if (a === "del") sheets.splice(si, 1);
     else if (a === "up" && si > 0) [sheets[si - 1], sheets[si]] = [sheets[si], sheets[si - 1]];
