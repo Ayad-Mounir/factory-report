@@ -147,7 +147,7 @@ html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}ht
 
 <main class="pg" id="tabFab" hidden>
 <div id="pendBanner" hidden></div><h2>المخزون (الأقمشة والرولوات)</h2><div class="muted">أضف المخزون من PDF أو صورة، ثم اضغط على سطر الرولو لتحديده وأنشئ الموديل من نفس الصفحة.</div>
-<div class="row"><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings">⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden></div>
+<div class="row"><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings" hidden>⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden></div>
 <section class="card">
   <div class="row">
     <label class="btn primary" style="margin:0;display:inline-block;color:var(--faccfg)">📷 اختيار صور<input id="file" type="file" accept="image/*" multiple hidden></label>
@@ -1526,7 +1526,7 @@ const _rf=()=>{ try{ drawPend(); }catch(e){} };
 window.addEventListener("storage",e=>{ if(!e.key||e.key===MAINKEY) _rf(); });
 window.addEventListener("focus",_rf); document.addEventListener("visibilitychange",()=>{ if(!document.hidden) _rf(); });
 let _pl=localStorage.getItem(MAINKEY); setInterval(()=>{ const n=localStorage.getItem(MAINKEY); if(n!==_pl){ _pl=n; if(!(document.activeElement&&document.activeElement.id==="pendQ")) _rf(); } },2000);
-syncSum(); st.cards.forEach(c=>{ _nm[c.id]=c.name; });
+syncSum(); st.cards.forEach(c=>{ _nm[c.id]=c.name; }); try{ if(localStorage.getItem("stk:open")==="settings"){ localStorage.removeItem("stk:open"); setTimeout(()=>{ const b=$("#btnSettings"); if(b) b.click(); },150); } }catch(e){}
 show("fab");
 })();
 </script>

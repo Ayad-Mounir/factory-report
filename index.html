@@ -1168,6 +1168,7 @@ function vCosts(){
   <label>حد تنبيه الأجور (%)<input id="s_wage" inputmode="numeric" style="width:80px" value="${st.wageThr}"></label>
   <label>حد قرب الخسارة (% هامش)<input id="s_loss" inputmode="numeric" style="width:80px" value="${(st.lossThr===undefined||st.lossThr===""||st.lossThr===null)?5:esc(st.lossThr)}"></label>   <label>تنبيه أحمر بعد (أيام من انتهاء المجموعة)<input id="s_stg" inputmode="numeric" style="width:80px" value="${stgDays()}"></label>   <label>موديل طويل (أيام)<input id="s_long" inputmode="numeric" style="width:80px" value="${st.longDays}"></label>
   <label>أجر ساعات اليوم المتوقع (د، اختياري)<input id="s_wday" inputmode="numeric" style="width:110px" placeholder="المتوسط" value="${esc(st.wageDay||"")}"></label></div></div>
+  <h2>نظام التقطيع</h2><div class="card"><div class="bar"><button class="btn" id="apiset">⚙︎ مفتاح API (قراءة الصور)</button></div><div class="note">إعدادات مفتاح الذكاء الاصطناعي لنظام التقطيع.</div></div>
   <h2>نسخة احتياطية</h2><div class="card"><div class="bar"><button class="btn" id="exp">حفظ نسخة</button><button class="btn" id="shr">حفظ في Drive / مشاركة</button><label class="btn alt">استرجاع<input type="file" id="imp" hidden></label><button class="btn del" id="reset">إعادة البيانات الأصلية</button></div><div class="note" id="bmsg">البيانات محفوظة في هذا الجهاز فقط. للنسخة في درايف: اضغط «حفظ في Drive / مشاركة» ثم اختر Google Drive. وللاسترجاع: «استرجاع» ثم اختر الملف من Drive. ${bkLine()}</div>${snapList()}</div>`;
   view.innerHTML=h; sumC();
   view.oninput=e=>{ const t=e.target;
@@ -1197,6 +1198,7 @@ function vCosts(){
     if(t.id==="addC"){ st.charges.push({name:"",amount:""}); save(); vCosts(); }
     if(t.dataset.del!==undefined && t.closest("tr")&&confirmDel("",t)){ st.charges.splice(+t.dataset.del,1); save(); vCosts(); }
     if(t.dataset.snap){ try{ const o=JSON.parse(localStorage.getItem(KEY+"-snap-"+t.dataset.snap)); if(o&&o.v&&confirm("سيُستبدل كل ما في التطبيق بهذه النسخة. متابعة؟")){ snap(st); o.rev=window.DEFAULT_STATE.rev; st=o; save(); vCosts(); } }catch(_){} return; }
+    if(t.id==="apiset"){ try{ localStorage.setItem("stk:open","settings"); }catch(e){} return go("stock"); }
     if(t.id==="exp"||t.id==="shr"){ doBackup(t.id==="shr").then(m=>{ const el=$("#bmsg"); if(el) el.textContent=m+" "+bkLine(); }); }
     if(t.id==="reset" && confirmDel("",t)){ snap(st); st=JSON.parse(JSON.stringify(window.DEFAULT_STATE)); save(); vCosts(); } };
   $("#imp").onchange=e=>{ const f=e.target.files[0]; if(!f) return; f.text().then(x=>{ try{ const o=JSON.parse(x); if(!o.v||!o.workers||!o.models) throw 0; if(!confirm("سيُستبدل كل ما في التطبيق ببيانات النسخة. متابعة؟")) return; snap(st); const cu=o._cut; delete o._cut; o.rev=window.DEFAULT_STATE.rev; o.lastBackup=new Date(f.lastModified).toISOString(); st=o; save(); if(cu&&typeof cu==="object") CUTK.forEach(k=>{ if(typeof cu[k]==="string"){ try{ localStorage.setItem(k,cu[k]); }catch(e){} } }); vCosts(); $("#bmsg").textContent="تم الاسترجاع. "+bkLine(); }catch(_){ $("#bmsg").textContent="الملف غير صالح: اختر ملف النسخة الاحتياطية (نسخة_...json) الذي حفظته من التطبيق."; } }); };
