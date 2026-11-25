@@ -978,9 +978,9 @@ async function tgSend(blob,name){ const c=tgCfg(); if(!c.token||!c.chat){ alert(
 document.addEventListener("change",e=>{ const i=e.target.id; if(i==="tgtok"||i==="tgchat"){ const c=tgCfg(); if(i==="tgtok") c.token=e.target.value.trim(); else c.chat=e.target.value.trim(); try{ localStorage.setItem("rapport-tg",JSON.stringify(c)); }catch(x){} } });
 document.addEventListener("click",async e=>{ const b=e.target; if(!b||!b.id&&!b.dataset.tgp) return;
   if(b.id==="tgtest"){ const c=tgCfg(); if(!c.token||!c.chat) return alert("أدخل التوكن والمعرّف أولاً"); try{ const r=await fetch("https://api.telegram.org/bot"+c.token+"/sendMessage",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:c.chat,text:"✅ اختبار الاتصال من تطبيق التقرير"})}); const j=await r.json(); alert(j.ok?"تم الاتصال: وصلت رسالة اختبار للقناة":"فشل: "+(j.description||r.status)); }catch(x){ alert("فشل: "+x.message); } }
-  if(b.dataset.tgp){ const o=document.getElementById(b.dataset.tgp); if(!o) return; window.__tg=true; setTimeout(()=>{ window.__tg=false; },30000); o.click(); } });
+  if(b.dataset.tgp){ const o=document.querySelector('[data-tgid="'+b.dataset.tgp+'"]'); if(!o) return; window.__tg=true; setTimeout(()=>{ window.__tg=false; },30000); o.click(); } });
 { const _sf=saveFile; saveFile=async function(n,bl){ if(window.__tg){ window.__tg=false; return tgSend(bl,n); } return _sf(n,bl); }; }
-{ const addTg=()=>{ document.querySelectorAll('#view button[id$="pdf"]').forEach(b=>{ if(b.nextElementSibling&&b.nextElementSibling.dataset&&b.nextElementSibling.dataset.tgp===b.id) return; const x=document.createElement("button"); x.className="btn"; x.dataset.tgp=b.id; x.textContent="🖨️ طباعة آلية"; b.after(x); }); };
+{ let tgn=0; const addTg=()=>{ document.querySelectorAll('#view button[id$="pdf"],#view button[data-ipdf]').forEach(b=>{ if(b.dataset.tgid) return; b.dataset.tgid="t"+(++tgn); const x=document.createElement("button"); x.className=b.className||"btn"; x.dataset.tgp=b.dataset.tgid; x.textContent="🖨️ طباعة آلية"; b.after(x); }); };
   new MutationObserver(addTg).observe(document.getElementById("view"),{childList:true,subtree:true}); addTg(); }
 /* ---------- مزامنة اسم الموديل مع نظام التقطيع ---------- */
 const ordD=m=>String((m&&(m.cutEnd||(m.hist&&m.hist[0])||m.stageDate||m.start))||"").slice(0,10);

@@ -1006,6 +1006,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
       let blob; try { blob = window.buildPdf([m3]).output("blob"); } catch (er) { alert("تعذر إنشاء PDF"); return; }
       const nm = (String(m3.tissu || m3.fournisseur || "stock").replace(/[^\w\u0600-\u06FF-]+/g, "_") || "stock") + ".pdf", f = new File([blob], nm, { type: "application/pdf" });
       const dl = () => { const u = URL.createObjectURL(blob), l = document.createElement("a"); l.href = u; l.download = nm; l.click(); setTimeout(() => URL.revokeObjectURL(u), 4000); };
+      if (window.__tg) { window.__tg = false; window.tgSend(blob, nm); return; }
       if (a === "shr") { if (navigator.canShare && navigator.canShare({ files: [f] })) navigator.share({ files: [f], title: nm }).catch(() => {}); else dl(); }
       else { const u = URL.createObjectURL(blob), w = window.open(u, "_blank"); if (!w) dl(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
       return; }
@@ -1033,7 +1034,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
     if (!m.length) { alert("لا توجد بيانات"); return; }
     if ($("#sortDate").checked) m = m.map((s, i) => [s, i]).sort((a, b) => dateKey(a[0].date) - dateKey(b[0].date) || a[1] - b[1]).map((x) => x[0]);
     const doc = window.buildPdf(m);
-    const blob = doc.output("blob"); resetPdf(); pdfUrl = URL.createObjectURL(blob);
+    const blob = doc.output("blob"); if (window.__tg) { window.__tg = false; window.tgSend(blob, "sheet1.pdf"); return; } resetPdf(); pdfUrl = URL.createObjectURL(blob);
     const a = $("#dl"); a.href = pdfUrl; a.hidden = false;
     const f = new File([blob], "sheet1.pdf", { type: "application/pdf" });
     if (navigator.canShare && navigator.canShare({ files: [f] })) { const b = $("#btnShare"); b.hidden = false; b.onclick = () => navigator.share({ files: [f], title: "sheet1.pdf" }).catch(() => {}); }
@@ -1360,6 +1361,7 @@ async function tgSend(blob,name){ const c=tgCfg(); if(!c.token||!c.chat){ alert(
   toast("⏳ جارٍ الإرسال للطابعة…");
   try{ const fd=new FormData(); fd.append("chat_id",c.chat); fd.append("document",new File([blob],name,{type:"application/pdf"})); const r=await fetch("https://api.telegram.org/bot"+c.token+"/sendDocument",{method:"POST",body:fd}); const j=await r.json(); if(!j.ok) throw new Error(j.description||("خطأ "+r.status)); toast("✅ أُرسل للطباعة"); return true; }
   catch(e){ alert("تعذّر الإرسال: "+e.message); return false; } }
+window.tgSend=tgSend;
 function reportPdf(c,tg){ if(!window.jspdf) return toast("PDF غير جاهز");
  const lt=s=>String(s||"").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,""),h=c.sh,t=shTot(c),gr=groups(c),{jsPDF}=window.jspdf,doc=new jsPDF({unit:"pt",format:"a4"});
  // تخطيط مأخوذ من نموذج fiche_coupe (الإحداثيات بالبكسل ← نقطة)
@@ -1441,6 +1443,9 @@ function reportPdf(c,tg){ if(!window.jspdf) return toast("PDF غير جاهز");
  if(tg) return tgSend(blob,name);
  const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
  if(navigator.canShare&&navigator.canShare({files:[file]})) navigator.share({files:[file],title:name}).catch(()=>{}); else dl(); }
+{ let tgn=0; const addTg=()=>{ document.querySelectorAll('#btnPdf,#btnBlankFab,[data-act="prt"]').forEach(b=>{ if(b.dataset.tgid) return; b.dataset.tgid="t"+(++tgn); const x=document.createElement("button"); x.className=(b.className||"")+" small"; x.type="button"; x.dataset.tgp=b.dataset.tgid; x.textContent="🖨️ آلي"; b.after(x); }); };
+  new MutationObserver(addTg).observe(document.body,{childList:true,subtree:true}); addTg();
+  document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-tgp]"); if(!b) return; const o=document.querySelector('[data-tgid="'+b.dataset.tgp+'"]'); if(!o) return; window.__tg=true; setTimeout(()=>{ window.__tg=false; },30000); o.click(); }); }
 // ---------- استيراد المخزون من PDF
 const toStock=o=>({id:null,fournisseur:o.fournisseur||"",prix:o.prix?Number(o.prix):null,tissu:o.tissu||"",date:o.date||"",unite:(o.unite||"").toUpperCase()==="MT"?"MT":(o.unite||"").toUpperCase()==="KL"?"KL":"",colors:(o.colors||[]).filter(c=>c.rolls&&c.rolls.length).map(c=>({name:c.name||"",hex:/^#[0-9a-f]{6}$/i.test(c.hex||"")?c.hex:"#999999",text:c.rolls.join("\n")})),unclear:o.unclear||[]});
 function parseFabPdf(buf){
@@ -1489,6 +1494,7 @@ $("#btnBlankFab").onclick=()=>{ if(!window.jspdf) return toast("PDF غير جا�
  const ins=["1. Read the form header: FOURNISSEUR, PRIX, TISSU, DATE, UNITE (MT or KL as ticked), PAGE. Each column = one colour (swatch on top, one roll per line). NB = count of values (compute it).","2. Ignore handwritten NB totals. Keep numbers exactly as written (21.50 -> 21.5). Skip empty columns. Never invent values; if a digit/name is unclear, say so.","3. Colour name = Spanish name from the swatch (Burdeos, Negro, Azul marino, Marron oscuro, Verde oscuro, Camel, Crudo, Gris claro, Topo, Morado, Beige).","4. TOTAL KL/MT = sum of rolls. TOTAL PRIX = total x PRIX. Output: A4 PDF, one page per photo + a summary page if several photos."];
  let yy=y+20; ins.forEach(s=>{ const ls=doc.splitTextToSize(s,W-12); ls.forEach(l=>{ doc.text(l,L+6,yy); yy+=8; }); yy+=2; });
  const blob=doc.output("blob"),file=new File([blob],"feuille_tissu_vide.pdf",{type:"application/pdf"});
+ if(window.__tg){ window.__tg=false; return tgSend(blob,"feuille_tissu_vide.pdf"); }
  const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="feuille_tissu_vide.pdf";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
  if(navigator.canShare&&navigator.canShare({files:[file]})) navigator.share({files:[file],title:"feuille_tissu_vide.pdf"}).catch(()=>{}); else dl(); };
 // ---- طلبيات التقرير الشامل الجديدة بانتظار التقطيع (قراءة فقط من بيانات التقرير، لا كتابة فيها) ----
