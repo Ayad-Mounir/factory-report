@@ -828,7 +828,8 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
 
   async function extract(file, prm) {
     const PRM = prm || PROMPT;
-    const data = await resizeToJpeg(file, prm ? 2400 : 1800);
+    const data = typeof file === "string" ? file : await resizeToJpeg(file, prm ? 2400 : 1800);
+    window._lastImg = data;
     if (LS.get("prov", "claude") === "gemini") {
       const gk = LS.get("gkey", ""); if (!gk) throw new Error("أدخل مفتاح Gemini من الإعدادات أولاً");
       const gm = LS.get("gmodel", "gemini-2.5-flash");
@@ -857,6 +858,51 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
     return JSON.parse(m[0]);
   }
 
+  // ---------- re-analyse ----------
+  const idb = () => new Promise((res, rej) => { try { const r = indexedDB.open("fab-img", 1); r.onupgradeneeded = () => r.result.createObjectStore("i"); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } });
+  const imgPut = (id, d) => idb().then((db) => { db.transaction("i", "readwrite").objectStore("i").put(d, id); }).catch(() => {});
+  const imgGet = (id) => idb().then((db) => new Promise((res) => { const q = db.transaction("i").objectStore("i").get(id); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); })).catch(() => null);
+  const imgDel = (id) => idb().then((db) => { db.transaction("i", "readwrite").objectStore("i").delete(id); }).catch(() => {});
+  const esc2 = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function reModal(html) { const o = document.createElement("div"); o.style.cssText = "position:fixed;inset:0;background:#0007;z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px"; o.innerHTML = '<div dir="rtl" style="background:var(--card,#fff);color:var(--fg,#111);border-radius:12px;padding:14px;max-width:420px;width:100%;max-height:85vh;overflow:auto;font-size:14px">' + html + '</div>'; document.body.appendChild(o); o.close = () => o.remove(); return o; }
+  function pickFile(cam) { return new Promise((res) => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; if (cam) i.setAttribute("capture", "environment"); i.onchange = () => res(i.files[0] || null); i.click(); }); }
+  async function reAnalyse(si) {
+    const s = sheets[si]; if (!s) return;
+    const saved = await imgGet(s.id);
+    const m = reModal('<b>🔄 إعادة تحليل الفيش</b><div style="margin:8px 0;opacity:.8">اختر الصورة التي سيقرأها الذكاء الاصطناعي من جديد:</div>' +
+      (saved ? '<button data-r="saved" style="width:100%;margin:4px 0">🖼 نفس الصورة المحفوظة</button>' : '') +
+      '<button data-r="cam" style="width:100%;margin:4px 0">📷 تصوير جديد بالهاتف</button><button data-r="pick" style="width:100%;margin:4px 0">📁 اختيار صورة من الهاتف</button><button data-r="x" style="width:100%;margin:4px 0">إلغاء</button>');
+    m.onclick = async (e) => {
+      const r = e.target.dataset && e.target.dataset.r; if (!r) return;
+      if (r === "x") return m.close();
+      let src = null;
+      if (r === "saved") src = saved; else { m.style.display = "none"; src = await pickFile(r === "cam"); m.style.display = "flex"; if (!src) return; }
+      m.firstChild.innerHTML = '<div id="reSt">⏳ جارٍ إعادة القراءة…</div>';
+      const names = s.colors.map((c, i) => (i + 1) + ". " + (c.name || "?")).join(", ");
+      const hint = PROMPT + "\nIMPORTANT: this is a RE-READ because a previous reading got some colour names wrong. Previous (possibly wrong) names in column order: " + names + ". Look carefully at each stapled swatch and decide the colour name again from the actual swatch colour (do not just repeat the previous names). Keep the same column order and number of columns unless clearly wrong.";
+      let o; try { o = toSheet(await extract(src, hint)); } catch (er) { m.firstChild.innerHTML = '<div class="err">' + esc2(er.message) + '</div><button data-r="x" style="margin-top:8px">إغلاق</button>'; return; }
+      const img = window._lastImg;
+      const same = o.colors.length === s.colors.length && o.colors.every((c, i) => c.text.split("\n").length === s.colors[i].text.split("\n").length);
+      const usedN = (model()[si] ? model()[si].colors : []).reduce((n, c) => n + c.used.filter((x) => x >= 0).length, 0);
+      const rows = Math.max(o.colors.length, s.colors.length), tr = [];
+      for (let i = 0; i < rows; i++) { const a = s.colors[i], b = o.colors[i]; const ch = a && b && a.name !== b.name; tr.push('<tr style="' + (ch ? "background:#ffe9a8;color:#000" : "") + '"><td>' + (i + 1) + '</td><td>' + (a ? '<i style="background:' + a.hex + ';display:inline-block;width:12px;height:12px;border:1px solid #888"></i> ' + esc2(a.name) : "—") + '</td><td>' + (b ? '<i style="background:' + b.hex + ';display:inline-block;width:12px;height:12px;border:1px solid #888"></i> ' + esc2(b.name) : "—") + '</td></tr>'); }
+      m.firstChild.innerHTML = '<b>نتيجة إعادة التحليل</b><table style="width:100%;margin:8px 0;border-collapse:collapse"><tr><th>#</th><th>قبل</th><th>بعد</th></tr>' + tr.join("") + '</table>' +
+        (same ? '<div style="opacity:.8">نفس عدد الألوان والرولات: سيتم تحديث الأسماء والألوان والأرقام فقط، وتبقى الرولات المستعملة كما هي.</div>' : '<div class="err" style="color:#c00">⚠ البنية مختلفة (عدد الألوان أو الرولات). التطبيق سيستبدل الفيش كاملاً' + (usedN ? ' وقد تضيع ' + usedN + ' رولات معلّمة كمستعملة.' : '.') + '</div>') +
+        (o.unclear.length ? '<div style="margin-top:6px;opacity:.8">ملاحظات: ' + esc2(o.unclear.join(" • ")) + '</div>' : '') +
+        '<div style="display:flex;gap:6px;margin-top:10px"><button data-r="ok" style="flex:1">✅ تطبيق</button><button data-r="x" style="flex:1">إلغاء</button></div>';
+      m.onclick = (e2) => {
+        const r2 = e2.target.dataset && e2.target.dataset.r; if (!r2) return;
+        if (r2 === "ok") {
+          if (same) o.colors.forEach((c, i) => { s.colors[i].name = c.name; s.colors[i].hex = c.hex; s.colors[i].text = c.text; });
+          else { s.colors = o.colors; }
+          if (src !== saved && img) imgPut(s.id, img);
+          resetPdf(); renderSheets(); persist();
+        }
+        m.close();
+      };
+    };
+  }
+
   function toSheet(o) {
     return {
       id: uid(), fournisseur: o.fournisseur || "", prix: o.prix ? Number(o.prix) : null, tissu: o.tissu || "", date: o.date || "",
@@ -872,7 +918,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
     const st = $("#status"); const out = [];
     for (let i = 0; i < files.length; i++) {
       st.textContent = `قراءة الصورة ${i + 1} من ${files.length}…`;
-      try { out.push(toSheet(await extract(files[i]))); }
+      try { const sh = toSheet(await extract(files[i])); imgPut(sh.id, window._lastImg); out.push(sh); }
       catch (e) { st.innerHTML = `<span class="err">الصورة ${i + 1}: ${e.message}</span>`; btn.disabled = false; sheets = sheets.concat(out); renderSheets(); return; }
     }
     sheets = sheets.concat(out); files = []; renderThumbs();
@@ -898,7 +944,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
         <button type="button" data-act="tog" class="sumb" style="width:100%;text-align:start;background:transparent;border:0;font:inherit;color:inherit;padding:2px 0;cursor:pointer"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><b data-sname></b><span data-arr style="font-size:18px">${isOpen ? "▾" : "▸"}</span></div><div data-sdots style="display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0;font-size:12px"></div><div data-stot style="font-size:13px;color:var(--mut)"></div></button>
         <div class="sbody" ${isOpen ? "" : "hidden"} style="margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
         <div class="row" style="justify-content:space-between;margin:0 0 6px"><strong>ورقة ${si + 1}</strong>
-          <span><button class="small" data-act="prt">🖨 طباعة</button> <button class="small" data-act="shr">↗ مشاركة</button> <button class="small" data-act="up">↑</button> <button class="small" data-act="down">↓</button> <button class="small" data-act="del">حذف</button></span></div>
+          <span><button class="small" data-act="prt">🖨 طباعة</button> <button class="small" data-act="shr">↗ مشاركة</button> <button class="small" data-act="rean">🔄 إعادة التحليل</button> <button class="small" data-act="up">↑</button> <button class="small" data-act="down">↓</button> <button class="small" data-act="del">حذف</button></span></div>
         <div class="prev" style="position:relative;overflow:hidden;border:1px solid var(--line);border-radius:6px;background:#fff;margin:6px 0 8px"></div>
         <div class="selbar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px"></div>
         <button type="button" class="small" data-act="edt" style="width:100%">${edOpen.has(s.id || si) ? "▴ إخفاء التعديل" : "✎ تعديل المخزون"}</button>
@@ -1029,7 +1075,8 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
       else { const u = URL.createObjectURL(blob), w = window.open(u, "_blank"); if (!w) dl(); setTimeout(() => URL.revokeObjectURL(u), 60000); }
       return; }
     const d = e.target.closest(".card"); const si = +d.dataset.si; const s = sheets[si];
-    if (a === "del") sheets.splice(si, 1);
+    if (a === "rean") { reAnalyse(si); return; }
+    if (a === "del") { imgDel(s.id); sheets.splice(si, 1); }
     else if (a === "up" && si > 0) [sheets[si - 1], sheets[si]] = [sheets[si], sheets[si - 1]];
     else if (a === "down" && si < sheets.length - 1) [sheets[si + 1], sheets[si]] = [sheets[si], sheets[si + 1]];
     else if (a === "addc") s.colors.push({ name: "", hex: "#999999", text: "" });
