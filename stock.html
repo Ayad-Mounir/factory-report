@@ -137,7 +137,7 @@ html.embed #tabFab>.row>button.primary{order:-1}
 html.embed #tabFab>.card{padding:10px;margin-bottom:10px}
 html.embed #tabFab>.card>.row>button,html.embed #tabFab>.card>.row>label{flex:1 1 28%;margin:0;padding:9px 4px;font-size:13.5px;text-align:center}
 html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}html.embed #wz td input[data-r],html.embed #wz td input[data-rq]{min-height:34px;font-size:16px}
-#outCard{position:sticky;bottom:0;z-index:5;box-shadow:0 -4px 14px rgba(0,0,0,.12)}#outCard{padding:8px 12px}#outCard .row{margin:4px 0}#outCard .tot{margin:2px 0 0;font-size:13px}#ordMenu[hidden]{display:none}#finBox>summary{cursor:pointer;font-weight:700;padding:8px 2px}.sbar{height:5px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}.sbar i{display:block;height:100%;background:#2e9e5b}#addMenu{gap:8px}#addMenu[hidden]{display:none}.sfree{font-size:13px;margin-top:6px}.sfree b{color:#2e9e5b}
+#outCard{position:static}#outCard .row[hidden]{display:none}#outCard{padding:8px 12px}#outCard .row{margin:4px 0}#outCard .tot{margin:2px 0 0;font-size:13px}#ordMenu[hidden]{display:none}#finBox>summary{cursor:pointer;font-weight:700;padding:8px 2px}.sbar{height:5px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}.sbar i{display:block;height:100%;background:#2e9e5b}#addMenu{gap:8px}#addMenu[hidden]{display:none}.sfree{font-size:13px;margin-top:6px}.sfree b{color:#2e9e5b}
 </style><script>if(location.search.indexOf("embed=1")>-1)document.documentElement.className+=" embed";</script><script>try{var th=localStorage.getItem("rapport-theme")||localStorage.getItem("cut-theme");if(th)document.documentElement.setAttribute("data-theme",th)}catch(e){}</script></head><body>
 
 <header class="top"><div class="hr"><span><button id="back" hidden>← القائمة</button></span><b id="ttl">✂️ نظام التقطيع</b></div><nav class="tabs"><button data-nav="fab">📦 المخزون</button><button data-nav="orders">📋 الطلبيات</button><button id="tabMenu" type="button" style="display:none">☰ القائمة</button></nav></header>
@@ -162,8 +162,8 @@ html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}ht
 </section>
 <section id="sheets"></section>
 <section class="card" id="outCard" hidden>
-  <div class="row"><label style="display:flex;gap:8px;align-items:center;margin:0;color:var(--fg)"><input id="sortDate" type="checkbox" style="width:auto"> ترتيب حسب التاريخ</label></div>
-  <div class="row"><button id="btnPdf" class="primary">إنتاج PDF</button><button id="btnShare" hidden>مشاركة</button><a id="dl" class="btn" hidden download="sheet1.pdf">تحميل sheet1.pdf</a></div>
+  <div class="row" hidden><label style="display:flex;gap:8px;align-items:center;margin:0;color:var(--fg)"><input id="sortDate" type="checkbox" style="width:auto"> ترتيب حسب التاريخ</label></div>
+  <div class="row" hidden><button id="btnPdf" class="primary">إنتاج PDF</button><button id="btnShare" hidden>مشاركة</button><a id="dl" class="btn" hidden download="sheet1.pdf">تحميل sheet1.pdf</a></div>
   <div class="tot" id="grand"></div>
 </section>
 <dialog id="dlgSettings"><form method="dialog">
@@ -973,7 +973,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
       if (fs0.n === 0 && fs0.u > 0) finL.push(d); else box.appendChild(d);
     });
     if (finL.length) { const dt = document.createElement("details"); dt.id = "finBox"; dt.open = !!window._finOpen; dt.innerHTML = `<summary>✓ منتهية (${finL.length})</summary>`; dt.ontoggle = () => { window._finOpen = dt.open; }; finL.forEach((x) => dt.appendChild(x)); box.appendChild(dt); }
-    { const sm = $("#stkSum"); if (sm) sm.innerHTML = sheets.length ? `<b>${gN}</b> رولو حرّ · <b>${gK.toFixed(1)}</b> متبقي · <b>${gU}</b> مستعمل` : ""; const tp = $("#stkTop"); if (tp) tp.hidden = !sheets.length; }
+    { const sm = $("#stkSum"); if (sm) { if (!sheets.length) sm.innerHTML = ""; else { const M = model(), U = {}, rows = M.map((m, i) => { const fs = fstat(m), all = fs.n + fs.u, ak = fs.nk + fs.uk, u = sheets[i].unite || ""; const t = U[u] || (U[u] = { all: 0, ak: 0, u: 0, uk: 0, n: 0, nk: 0 }); t.all += all; t.ak += ak; t.u += fs.u; t.uk += fs.uk; t.n += fs.n; t.nk += fs.nk; const nm = esc([sheets[i].tissu || sheets[i].fournisseur || "—", sheets[i].fournisseur && sheets[i].tissu ? sheets[i].fournisseur : "", sheets[i].date].filter(Boolean).join(" · ")); return `<tr><td class="l">${nm}</td><td>${ak.toFixed(1)}<small> (${all})</small></td><td>${fs.uk.toFixed(1)}<small> (${fs.u})</small></td><td><b>${fs.nk.toFixed(1)}</b><small> (${fs.n})</small></td></tr>`; }).join(""), tot = Object.keys(U).map((k) => { const t = U[k]; return `<tr style="font-weight:700;background:var(--bg)"><td class="l">المجموع ${esc(k)}</td><td>${t.ak.toFixed(1)}<small> (${t.all})</small></td><td>${t.uk.toFixed(1)}<small> (${t.u})</small></td><td>${t.nk.toFixed(1)}<small> (${t.n})</small></td></tr>`; }).join(""); sm.innerHTML = `<details id="stkDet"${window._sdo ? " open" : ""}><summary style="cursor:pointer"><b>${gN}</b> رولو حرّ · <b>${gK.toFixed(1)}</b> متبقي · <b>${gU}</b> مستعمل <small style="color:var(--mut)">▾ التفاصيل</small></summary><div style="overflow-x:auto;margin-top:8px"><table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center"><tr style="background:var(--bg)"><th class="l">المخزون</th><th>الكل</th><th>المستعمل</th><th>الباقي</th></tr>${rows}${tot}</table><div style="color:var(--mut);font-size:12px;margin-top:4px">الأرقام بالكلغ/المتر، وبين قوسين عدد الرولوات.</div></div></details>`; const dd = sm.querySelector("#stkDet"); dd.ontoggle = () => { window._sdo = dd.open; }; } } const tp0 = 0; const tp = $("#stkTop"); if (tp) tp.hidden = !sheets.length; }
     $("#outCard").hidden = !sheets.length;
     updateGrand(); persist();
   }
@@ -1524,7 +1524,7 @@ function reportPdf(c,tg){ if(!window.jspdf) return toast("PDF غير جاهز");
  if(tg) return tgSend(blob,name);
  const dl=()=>{const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000)};
  if(navigator.canShare&&navigator.canShare({files:[file]})) navigator.share({files:[file],title:name}).catch(()=>{}); else dl(); }
-{ let tgn=0; const addTg=()=>{ document.querySelectorAll('#btnPdf,#btnBlankFab,[data-act="prt"]').forEach(b=>{ if(b.dataset.tgid) return; b.dataset.tgid="t"+(++tgn); const x=document.createElement("button"); x.className=(b.className||"")+" small"; x.type="button"; x.dataset.tgp=b.dataset.tgid; x.textContent="🖨️ طباعة آلية"; b.after(x); }); };
+{ let tgn=0; const addTg=()=>{ document.querySelectorAll('#btnBlankFab,[data-act="prt"]').forEach(b=>{ if(b.dataset.tgid) return; b.dataset.tgid="t"+(++tgn); const x=document.createElement("button"); x.className=(b.className||"")+" small"; x.type="button"; x.dataset.tgp=b.dataset.tgid; x.textContent="🖨️ طباعة آلية"; b.after(x); }); };
   new MutationObserver(addTg).observe(document.body,{childList:true,subtree:true}); addTg();
   document.addEventListener("click",e=>{ const b=e.target.closest&&e.target.closest("[data-tgp]"); if(!b) return; const o=document.querySelector('[data-tgid="'+b.dataset.tgp+'"]'); if(!o) return; window.__tg=true; setTimeout(()=>{ window.__tg=false; },30000); o.click(); }); }
 // ---------- استيراد المخزون من PDF
