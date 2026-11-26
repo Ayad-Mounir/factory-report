@@ -1439,10 +1439,9 @@ function groupPdf(c,tg){ if(!window.jspdf) return toast("PDF غير جاهز"); 
  if(navigator.canShare&&navigator.canShare({files:[file]})) navigator.share({files:[file],title:name}).catch(()=>{}); else dl(); }
 /* ---------- الطباعة الآلية عبر تلغرام: بوت إرسال ← قناة ← بوت الطباعة ---------- */
 function tgCfg(){ try{ return JSON.parse(localStorage.getItem("rapport-tg")||"{}")||{}; }catch(e){ return {}; } }
-async function tgSend(blob,name){ const c=tgCfg(); if(!c.token||!c.chat){ alert("أدخل توكن بوت الإرسال ومعرّف القناة: الإعدادات ← الطباعة عبر تلغرام"); return false; }
-  toast("⏳ جارٍ الإرسال للطابعة…");
-  try{ const fd=new FormData(); fd.append("chat_id",c.chat); fd.append("document",new File([blob],name,{type:"application/pdf"})); const r=await fetch("https://api.telegram.org/bot"+c.token+"/sendDocument",{method:"POST",body:fd}); const j=await r.json(); if(!j.ok) throw new Error(j.description||("خطأ "+r.status)); toast("✅ أُرسل للطباعة"); return true; }
-  catch(e){ alert("تعذّر الإرسال: "+e.message); return false; } }
+async function tgSend(blob,name){ const f=new File([blob],name,{type:"application/pdf"});
+  try{ if(navigator.canShare&&navigator.canShare({files:[f]})){ await navigator.share({files:[f],title:name}); return true; } }catch(e){ if(e&&e.name==="AbortError") return false; }
+  const u=URL.createObjectURL(blob),l=document.createElement("a"); l.href=u; l.download=name; l.click(); setTimeout(()=>URL.revokeObjectURL(u),4000); alert("المشاركة غير متاحة في هذا المتصفح، تم تنزيل الملف. أرسله للبوت يدوياً."); return false; }
 window.tgSend=tgSend;
 function reportPdf(c,tg){ if(!window.jspdf) return toast("PDF غير جاهز");
  const lt=s=>String(s||"").replace(/[^\x20-\x7E\u00A0-\u00FF]/g,""),h=c.sh,t=shTot(c),gr=groups(c),{jsPDF}=window.jspdf,doc=new jsPDF({unit:"pt",format:"a4"});
