@@ -633,12 +633,18 @@ function compute(st){
   const hc = (g,t) => { if(!hasHC(g,t)) return 0; const v=String((st.heads[g]||{})[dnum(t)]).trim(); return isAbs(v)?0:(num(v)||0); };
 
   // ---- models
-  const M = [], EX = [];
+  const M = [], EX = [], TL = [];
   st.models.forEach((m,i)=>{
     const q=num(m.qty), p=num(m.price);
     if(!m.g || !st.groups[m.g] || !q || p===null || !m.start) return;
     const a=pd(m.start), b=m.end?pd(m.end):null;
-    if(a>mE || (b!==null && b<mS)){ EX.push({i, g:String(m.g), m:m.name, q, a, b, fin:b!==null, x:true}); return; }
+    if(a>mE || (b!==null && b<mS)){ EX.push({i, g:String(m.g), m:m.name, q, a, b, fin:b!==null, x:true});
+      /* طلبية انتهت قبل هذا الشهر ولم تُسلَّم بعد: تبقى تتحمّل المصاريف حتى التسليم */
+      if(b!==null && b<mS && a<=mE){ const kk=(m.stage===undefined||m.stage==="")?null:Number(m.stage), ds=(m.hist&&m.hist[6])||m.stageDate; let keep=false, pe=Infinity;
+        if(kk===null||isNaN(kk)){ const tf=pd(st.trackFrom||st.today); keep=!((tf-b)/DAY>7); }
+        else if(kk===6){ const dd=ds?pd(ds):null; if(dd!==null&&dd>=mS){ keep=true; pe=dd; } }
+        else keep=true;
+        if(keep) TL.push({i, g:String(m.g), m:m.name, q, p, sp:num(m.sale), a, b, an:mS, fin:true, tail:true, fixed:0, joint:"", plan:null, done:null, wd:0, pe0:pe}); } return; }
     M.push({i, g:String(m.g), m:m.name, q, p, sp:num(m.sale), a, b, an:Math.max(a,mS), fin:b!==null, fixed:0, joint:(m.joint||"").trim(), plan:(m.plan&&!m.end)?pd(m.plan):null, done:num(m.done), wd:0});
   });
   const incomplete = st.models.filter(m=>!(m.g && st.groups[m.g] && num(m.qty) && num(m.price)!==null && m.start));
@@ -674,8 +680,8 @@ function compute(st){
   // وزن الموديل في التوزيع = قيمته (الكمية × الثمن)؛ والعمال يتنقلون بين الموديلات فالتوزيع مباشر على الموديلات المفتوحة
   const wt = r => (r.q*r.p)||r.q;
   // مراحل ما بعد الخياطة (نضافة...تسليم): تستمر التكلفة بعد نهاية المجموعة حتى التسليم، وتوزَّع مع باقي الموديلات الجارية طالما هناك عمال يشتغلون
-  M.forEach(r=>{ const m=st.models[r.i]||{}; r.pe=null; if(r.b===null) return; let k=(m.stage===undefined||m.stage==="")?null:Number(m.stage); if(k===null||isNaN(k)){ /* بلا مرحلة محدّدة: نفس استنتاج «التتبع» — المنتهية قبل بدء التتبع بأكثر من 7 أيام تُعدّ مسلَّمة، وغيرها في النضافة (غير مسلَّمة) فتستمر تكلفتها */ const tf=pd(st.trackFrom||st.today); k=((tf-r.b)/DAY>7)?6:2; } if(k===6){ const ds=(m.hist&&m.hist[6])||m.stageDate; r.pe=ds?pd(ds):null; } else r.pe=Infinity; });
-  const elig = (t,hourlyOnly) => { const gs=G.filter(g=>(!hourlyOnly||st.groups[g].hourly) && hc(g,t)>0); return M.filter(r=>(gs.includes(r.g) && open(r,t,true)) || (gs.length>0 && r.pe!==null && t>r.b && t<=r.pe)); };
+  M.concat(TL).forEach(r=>{ const m=st.models[r.i]||{}; r.pe=null; if(r.b===null) return; if(r.tail){ r.pe=r.pe0; return; } let k=(m.stage===undefined||m.stage==="")?null:Number(m.stage); if(k===null||isNaN(k)){ /* بلا مرحلة محدّدة: نفس استنتاج «التتبع» — المنتهية قبل بدء التتبع بأكثر من 7 أيام تُعدّ مسلَّمة، وغيرها في النضافة (غير مسلَّمة) فتستمر تكلفتها */ const tf=pd(st.trackFrom||st.today); k=((tf-r.b)/DAY>7)?6:2; } if(k===6&&m.delivOk){ const ds=(m.hist&&m.hist[6])||m.stageDate; r.pe=ds?pd(ds):null; } else r.pe=Infinity; /* لا تتوقف التكلفة إلا بتاريخ تسليم مؤكَّد */ });
+  const elig = (t,hourlyOnly) => { const gs=G.filter(g=>(!hourlyOnly||st.groups[g].hourly) && hc(g,t)>0); return M.concat(TL).filter(r=>(gs.includes(r.g) && open(r,t,true)) || (gs.length>0 && r.pe!==null && t>r.b && t<=r.pe)); };
   const dayW={}; st.workers.forEach(w=>{ const rt=num(w.rate)||0; days.forEach(d=>{ const v=String((w.hours||{})[d]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v); if(n!==null) dayW[d]=(dayW[d]||0)+n*rt; }); });
   if(MWD>0) winDays.forEach(t=>{ if(dw(t)>0) dayW[dnum(t)]=(dayW[dnum(t)]||0)+MWD*dw(t); });
   let UNAL=0;
@@ -686,6 +692,7 @@ function compute(st){
   });
   const RATE_W=0;
   const YM=Y*12+Mo, cyOf=r=>{ const c=(st.models[r.i]||{}).carry; return c&&YM>c.ym?c:null; };
+  TL.forEach(r=>{ r.wages=r.wages||0; const cy=cyOf(r); if(cy){ r.wages+=cy.w||0; r.wagesM=(r.wagesM||0)+(cy.wm||0); } });
   M.forEach(r=>{ r.wages=r.wages||0; const cy=cyOf(r); if(cy){ r.wages+=cy.w||0; r.wagesM=(r.wagesM||0)+(cy.wm||0); } r.add=r.wages/r.q; r.real=r.p+r.add; r.hourly=st.groups[r.g].hourly; });
 
   // ---- worker-days of each model (month) and effective worker-days (finished)
@@ -778,7 +785,7 @@ function compute(st){
   const AV=G.reduce((s,g)=>s+AVg[g],0);
   const oh=(AV*WDm)>0?TC/(AV*WDm):0;
   const NGc=G.filter(g=>AVg[g]>0).length; let OHUN=0;
-  M.forEach(r=>{ r.ohAcc=0; });
+  M.forEach(r=>{ r.ohAcc=0; }); TL.forEach(r=>{ r.ohAcc=0; });
   rng(mS,Math.min(TODAY,mE)).forEach(t=>{ const dd=dw(t)*TC/WDm; if(!(dd>0)) return;
     const op=elig(t,false);
     if(!op.length){ OHUN+=dd; return; }
@@ -787,6 +794,7 @@ function compute(st){
   });
   const ohG={}; G.forEach(g=>{ const L=M.filter(r=>r.g===g), w=L.reduce((s,r)=>s+r.wdv,0); ohG[g]= w>0 ? L.reduce((s,r)=>s+r.ohAcc,0)/w : 0; });
   const gw=Object.keys(GV).reduce((s,g)=>s+GV[g].wd,0), ohA=gw>0?Object.keys(GV).reduce((s,g)=>s+ohG[g]*GV[g].wd,0)/gw:0;
+  TL.forEach(r=>{ const cy=cyOf(r); if(cy) r.ohAcc+=cy.o||0; r.oh=r.ohAcc/r.q; r.add=(r.wages||0)/r.q; r.real=r.p+r.add; r.full=r.real+r.oh; });
   M.forEach(r=>{ const cy=cyOf(r); if(cy) r.ohAcc+=cy.o||0; r.oh=r.ohAcc/r.q; r.full=r.real+r.oh; if(r.sp!==null){ r.pf=r.sp-r.full; r.pc=100*r.pf/r.sp; } });
   // ---- توقع الربح للموديلات الجارية/التي لم تبدأ: المتحقق حتى اليوم + المتبقي بمعدل المجموعة التاريخي
   const hr=L=>{ const f=L.filter(x=>x.fin&&x.p>0), b=f.reduce((s,x)=>s+x.p*x.q,0); return b>0?f.reduce((s,x)=>s+(x.add+x.oh)*x.q,0)/b:null; };
@@ -798,7 +806,7 @@ function compute(st){
 
   // last day with headcount
   let lastHead=null; G.forEach(g=>Object.keys(st.heads[g]||{}).forEach(d=>{ if(String(st.heads[g][d]).trim()!=="" && (lastHead===null||+d>lastHead)) lastHead=+d; }));
-  return {MWL:(st.monthly||[]).filter(x=>String(x.name||"").trim()||num(x.amount)).map(x=>({n:String(x.name||"").trim()||"—",amt:num(x.amount)||0,acc:MWT>0?(num(x.amount)||0)*MWacc/MWT:0})),MW:MWacc,MWT,MWD,EX,ohG,ohA,NGc,UNAL,OHUN,mS,nD,TODAY,G,M,WK,WAGES,HOURS,GV,okg,rv,rp,rq,rm,TQ,TM,TW,MoOn,FC,TC,WDm,AVg,AV,oh,hc,hasHC,firstD,lastD,lastHead,workDays,incomplete,RATE_W,dnum};
+  return {TL,MWL:(st.monthly||[]).filter(x=>String(x.name||"").trim()||num(x.amount)).map(x=>({n:String(x.name||"").trim()||"—",amt:num(x.amount)||0,acc:MWT>0?(num(x.amount)||0)*MWacc/MWT:0})),MW:MWacc,MWT,MWD,EX,ohG,ohA,NGc,UNAL,OHUN,mS,nD,TODAY,G,M,WK,WAGES,HOURS,GV,okg,rv,rp,rq,rm,TQ,TM,TW,MoOn,FC,TC,WDm,AVg,AV,oh,hc,hasHC,firstD,lastD,lastHead,workDays,incomplete,RATE_W,dnum};
 }
 const api={compute,pd,dw,rng,ranks,num,isAbs,DAY};
 if(typeof module!=="undefined") module.exports=api; else root.Calc=api;
@@ -1027,7 +1035,8 @@ function decor(k){ if(tab!==k) return; view.insertAdjacentHTML("afterbegin",subN
 
 /* ---------- جدول الأرباح بالموديل ---------- */
 let pF="all";
-function profitRows(R){ return R.M.slice().sort((a,b)=>Number(a.g)-Number(b.g)||a.i-b.i).map(r=>{ const m=st.models[r.i]||{}; return {r,m,sale:r.sp===null?null:r.sp*r.q,gp:r.q*r.p,wm:r.wagesM||0,wh:(r.wages||0)-(r.wagesM||0),fx:r.ohAcc||0,bill:!!m.bill}; }); }
+const costSt=r=>{ const m=st.models[r.i]||{}; return Number(m.stage)===6&&m.delivOk?"نهائية":"حتى الآن"; };
+function profitRows(R){ const tl=(R.TL||[]).map(r=>{ const m=st.models[r.i]||{}; return {r,m,sale:null,gp:0,wm:r.wagesM||0,wh:(r.wages||0)-(r.wagesM||0),fx:r.ohAcc||0,bill:!!m.bill,tail:true}; }); return R.M.slice().sort((a,b)=>Number(a.g)-Number(b.g)||a.i-b.i).map(r=>{ const m=st.models[r.i]||{}; return {r,m,sale:r.sp===null?null:r.sp*r.q,gp:r.q*r.p,wm:r.wagesM||0,wh:(r.wages||0)-(r.wagesM||0),fx:r.ohAcc||0,bill:!!m.bill}; }).concat(tl); }
 function profitTotals(R,rows,isAll){
   const S=k=>rows.reduce((s,x)=>s+(x[k]||0),0), un=isAll?((R.UNAL||0)+(R.OHUN||0)):0, sale=S("sale"), gp=S("gp"), wh=S("wh"), wm=S("wm"), fx=S("fx");
   return {wh,wm,fx,un,sale,gp,res:sale-gp-wh-wm-fx-un,fxFull:R.TC};
@@ -1037,20 +1046,20 @@ function profitBox(T,R){ const row=(l,v,x)=>`<div class="wn" style="padding:5px 
 function profitPage(R,rows,T){
   const f=n=>fa(n), S=rows.reduce((s,x)=>s+(x.sale||0),0), P=rows.reduce((s,x)=>s+x.gp,0), row=(l,v,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${f(v)}</td></tr>`;
   return `<div class="rp"><h1>جدول الأرباح بالموديل – ${mLabel()}</h1><div class="sub">الوضع في ${dm(R.TODAY)} &nbsp;|&nbsp; المبالغ بالدرهم (إجمالي كل موديل)</div>
-  <table><tr><th>المجموعة</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>الحالة</th></tr>
-  ${rows.map(x=>`<tr><td>G${x.r.g}</td><td class="l">${esc(x.r.m)}</td><td>${f(x.r.q)}</td><td>${f(x.gp)} <small>(${fa(x.r.p,2)}/ق)</small></td><td>${x.sale===null?"—":f(x.sale)+" <small>("+fa(x.r.sp,2)+"/ق)</small>"}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("")}
-  <tr class="tot"><td colspan="3" class="l">المجموع (${rows.length})</td><td>${f(P)}</td><td>${f(S)}</td><td></td></tr></table>
+  <table><tr><th>المجموعة</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>التكلفة الفعلية/قطعة</th><th>الربح/قطعة</th><th>الحالة</th></tr>
+  ${rows.map(x=>`<tr><td>G${x.r.g}</td><td class="l">${esc(x.r.m)}${x.tail?" <small>(من الشهر السابق)</small>":""}</td><td>${f(x.r.q)}</td><td>${f(x.gp)} <small>(${fa(x.r.p,2)}/ق)</small></td><td>${x.sale===null?"—":f(x.sale)+" <small>("+fa(x.r.sp,2)+"/ق)</small>"}</td><td>${fa(x.r.full,2)} <small>(${costSt(x.r)})</small></td><td>${x.r.sp===null?"—":fa(x.r.sp-x.r.full,2)}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("")}
+  <tr class="tot"><td colspan="3" class="l">المجموع (${rows.length})</td><td>${f(P)}</td><td>${f(S)}</td><td></td><td></td><td></td></tr></table>
   <h3>المصاريف حتى ${dm(R.TODAY)} والنتيجة</h3><table style="width:70%">${row("مجموع ثمن البيع",T.sale)}${row("مجموع ثمن المجموعة",T.gp)}${row("عمال الساعات",T.wh)}${row("عمال الشهر",T.wm)}${row("المصاريف الثابتة (حتى الآن)",T.fx)}${T.un?row("غير موزَّع على موديلات",T.un):""}${row((T.res<0?"خسارة":"ربح")+" حتى الآن"+(T.sale?" ("+fa(100*T.res/T.sale,1)+"%)":""),T.res,1)}</table>
   <div class="small">النتيجة للموديلات الظاهرة في الجدول فقط، بأجورها ومصاريفها المحمّلة عليها حتى اليوم. المصاريف الثابتة للشهر كاملاً ${f(T.fxFull)} د.</div></div>`;
 }
 function vProfit(){
   const R=compute(st), all=profitRows(R), q=x=>pF==="all"?true:pF==="fin"?x.r.fin:pF==="open"?!x.r.fin:x.bill, rows=all.filter(q), T=profitTotals(R,rows,pF==="all");
   const cnt=v=>all.filter(x=>v==="all"?true:v==="fin"?x.r.fin:v==="open"?!x.r.fin:x.bill).length, chip=(v,l)=>`<button class="sc ${pF===v?"c":""}" data-pf="${v}">${l} (${fa(cnt(v))})</button>`;
-  const body=rows.map(x=>`<tr><td><input type="checkbox" data-bill="${x.r.i}" ${x.bill?"checked":""}></td><td>G${x.r.g}</td><td class="nm">${esc(x.r.m)}</td><td>${fa(x.r.q)}</td><td>${fa(x.gp)}<br><small>${fa(x.r.p,2)}/ق</small></td><td>${x.sale===null?"—":fa(x.sale)+"<br><small>"+fa(x.r.sp,2)+"/ق</small>"}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("");
+  const body=rows.map(x=>`<tr><td><input type="checkbox" data-bill="${x.r.i}" ${x.bill?"checked":""}></td><td>G${x.r.g}</td><td class="nm">${esc(x.r.m)}${x.tail?"<br><small>من الشهر السابق</small>":""}</td><td>${fa(x.r.q)}</td><td>${fa(x.gp)}<br><small>${fa(x.r.p,2)}/ق</small></td><td>${x.sale===null?"—":fa(x.sale)+"<br><small>"+fa(x.r.sp,2)+"/ق</small>"}</td><td><b>${fa(x.r.full,2)}</b><br><small>${costSt(x.r)}</small></td><td>${x.r.sp===null?"—":fa(x.r.sp-x.r.full,2)}</td><td>${x.r.fin?"منتهٍ":"جارٍ"}</td></tr>`).join("");
   const S=rows.reduce((s,x)=>s+(x.sale||0),0), P=rows.reduce((s,x)=>s+x.gp,0);
   view.innerHTML=`<div class="note">اختر الموديلات التي ستطلب أداءها من العميل بالمربع الأول، ثم صفِّ بـ «للفوترة». المبالغ إجمالي كل موديل.</div>
   <div class="stg" style="margin:0 0 8px">${chip("all","الكل")}${chip("fin","منتهية")}${chip("open","جارية")}${chip("bill","للفوترة")}</div>
-  <div class="scroll"><table class="g"><tr><th>للفوترة</th><th>G</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>الحالة</th></tr>${body||'<tr><td colspan="7">لا موديلات.</td></tr>'}<tr class="tot"><td></td><td colspan="3">المجموع (${fa(rows.length)})</td><td>${fa(P)}</td><td>${fa(S)}</td><td></td></tr></table></div>
+  <div class="scroll"><table class="g"><tr><th>للفوترة</th><th>G</th><th>الموديل</th><th>الكمية</th><th>ثمن المجموعة</th><th>ثمن البيع</th><th>التكلفة الفعلية/قطعة</th><th>الربح/قطعة</th><th>الحالة</th></tr>${body||'<tr><td colspan="9">لا موديلات.</td></tr>'}<tr class="tot"><td></td><td colspan="3">المجموع (${fa(rows.length)})</td><td>${fa(P)}</td><td>${fa(S)}</td><td></td><td></td><td></td></tr></table></div>
   <div class="card"><b>المصاريف والنتيجة حتى الآن — ${({all:"كل الموديلات",fin:"المنتهية",open:"الجارية",bill:"المحدد للفوترة"})[pF]} (${fa(rows.length)})</b>${profitBox(T,R)}</div>
   ${pdfReady()?`<div class="bar"><button class="btn" id="ppdf">تصدير PDF</button>${window.claude?"":'<button class="btn alt" id="pshare">مشاركة</button>'}</div>`:""}
   <div id="ppg" style="display:none">${brand(R,profitPage(R,rows,T))}</div>`;
@@ -1233,7 +1242,7 @@ function vCosts(){
     save(); };
 
   function switchMonth(ny,nm){ st.arch=st.arch||{}; const ok=st.year+"-"+st.month, nk=ny+"-"+nm; if(ok===nk) return;
-    const R0=compute(st); if(ny*12+nm>st.year*12+st.month){ const mEnd0=R0.mS+(R0.nD-1)*DAY; R0.M.forEach(r=>{ if(!r.fin||r.b>mEnd0){ const m=st.models[r.i]; if(m) m.carry={ym:st.year*12+st.month,w:r.wages||0,wm:r.wagesM||0,o:r.ohAcc||0}; } }); }
+    const R0=compute(st); if(ny*12+nm>st.year*12+st.month){ const mEnd0=R0.mS+(R0.nD-1)*DAY; R0.M.concat(R0.TL||[]).forEach(r=>{ const mm0=st.models[r.i]||{}, und=r.fin&&!(Number(mm0.stage)===6&&(mm0.hist&&mm0.hist[6]||mm0.stageDate)&&pd((mm0.hist&&mm0.hist[6])||mm0.stageDate)<=mEnd0); if(!r.fin||r.b>mEnd0||und){ const m=st.models[r.i]; if(m) m.carry={ym:st.year*12+st.month,w:r.wages||0,wm:r.wagesM||0,o:r.ohAcc||0}; } }); }
     allM(R0).forEach(r=>{ const m=st.models[r.i]; if(m&&(m.stage===undefined||m.stage==="")){ const si=stageInfo(r,R0); m.stage=si.k; if(si.k>=2&&si.k<=5&&!m.stageDate&&r.b) m.stageDate=new Date(r.b).toISOString().slice(0,10); } });
     const delIdx=new Set(allM(R0).filter(r=>stageInfo(r,R0).k===DLV&&(st.models[r.i]||{}).inv).map(r=>r.i));
     st.arch[ok]={w:JSON.parse(JSON.stringify(st.workers)),groups:JSON.parse(JSON.stringify(st.groups)),hours:st.workers.map(w=>({n:w.name,h:w.hours||{},a:w.advance})),heads:st.heads,charges:st.charges,monthly:JSON.parse(JSON.stringify(st.monthly||[])),models:(()=>{ const ix=new Set(delIdx); R0.M.forEach(r=>{ if(r.fin) ix.add(r.i); }); return JSON.parse(JSON.stringify(st.models.filter((m,i)=>ix.has(i)))); })()};
@@ -1574,6 +1583,8 @@ function todoCard(R){
   if(od.length) add(false,"","تجاوزت نهايتها المتوقعة: "+od.map(r=>esc(r.m)).join("، ")+" — سجّل النهاية أو حدّثها","models","o");
   const thr=stgDays(), sk=allM(R).map(r=>({r,si:stageInfo(r,R)})).filter(x=>x.si.days!==null&&x.si.days>thr&&x.si.k<DLV);
   if(sk.length) add(false,"","عالقة في المراحل: "+sk.map(x=>esc(x.r.m)).join("، "),"track","o");
+  { const ne=st.models.filter(needEnd).map(m=>esc(m.name||"—")); if(ne.length) add(false,"","تاريخ انتهاء المجموعة غير مؤكد: "+ne.join("، ")+" — يلزم لحساب اليوم الحقيقي","track","r");
+    const nd=st.models.filter(m=>Number(m.stage)===6&&m.stage!==""&&!m.delivOk).map(m=>esc(m.name||"—")); if(nd.length) add(false,"","تاريخ التسليم غير مؤكد: "+nd.join("، "),"track","o"); }
   const late=lt.getHours()>=17, bk=bkToday();
   items.push({ok:bk,t:bk?"نسخة اليوم أُرسلت":"لم تُرسل نسخة اليوم · "+bkLine(),bk:1,lv:bk?"g":(late?"r":"b")});
   const bad=items.filter(x=>!x.ok).length;
@@ -1589,7 +1600,7 @@ async function doBackup(share){ const blob=new Blob([JSON.stringify(Object.assig
 const pcCls=p=>(p===null||p===undefined||isNaN(p))?"":(p<0?"bad":p<10?"warn":"ok");
 const bdg=p=>`<span class="bdg ${pcCls(p)}">${(p===null||p===undefined||isNaN(p))?"—":fa(p,1)+"%"}</span>`;
 const pbar=(f,c)=>`<div class="pbar"><i class="${c||""}" style="width:${Math.round(100*Math.max(0,Math.min(1,f||0)))}%"></i></div>`;
-function mWarn(m){ const w=[]; if(!m.g) w.push("بلا مجموعة"); if(!num(m.qty)) w.push("بلا كمية"); if(num(m.price)===null) w.push("بلا ثمن"); if(!m.start) w.push("بلا تاريخ بداية"); if(num(m.sale)===null&&m.name) w.push("بلا ثمن بيع"); if(m.start&&m.end&&m.end<m.start) w.push("النهاية قبل البداية"); if(num(m.done)>num(m.qty)) w.push("المنجز أكبر من الكمية"); return w.length?`<div class="note" style="color:var(--warn)">⚠ ${w.join(" • ")}</div>`:""; }
+function mWarn(m){ const w=[]; if(!m.g) w.push("بلا مجموعة"); if(!num(m.qty)) w.push("بلا كمية"); if(num(m.price)===null) w.push("بلا ثمن"); if(!m.start) w.push("بلا تاريخ بداية"); if(num(m.sale)===null&&m.name) w.push("بلا ثمن بيع"); if(m.start&&m.end&&m.end<m.start) w.push("النهاية قبل البداية"); if(needEnd(m)) w.push("تاريخ انتهاء المجموعة غير مؤكد"); if(num(m.done)>num(m.qty)) w.push("المنجز أكبر من الكمية"); return w.length?`<div class="note" style="color:var(--warn)">⚠ ${w.join(" • ")}</div>`:""; }
 
 const STAGES=["التقطيع","المجموعة","النضافة","سبيسيال","بلانشا","لومبلاج","مسلَّم"], DLV=6;
 function migStg(){ if(!st||st.stgv===2) return; const f=m=>{ if(m&&m.stage!==undefined&&m.stage!==""&&!isNaN(Number(m.stage))) m.stage=Number(m.stage)+1; }; (st.models||[]).forEach(f); Object.keys(st.arch||{}).forEach(k=>((st.arch[k]||{}).models||[]).forEach(f)); st.stgv=2; }
@@ -1612,7 +1623,11 @@ function rerenderTab(){ const y=window.scrollY; ({home:vHome,report:vReport,trac
 function askDeliv(i){ const m=st.models[i]; if(!m) return; const def=(m.delivOk&&delivDate(m))||st.today||"";
   const o=document.createElement("div"); o.className="ebg"; o.style.zIndex=60; o.innerHTML=`<div class="esheet"><div class="mh"><b>📦 تاريخ التسليم – ${esc(m.name||"")}</b></div><label>اختر تاريخ التسليم الفعلي<input type="date" id="dvd" value="${esc(def)}"></label><div class="note">تتوقف تكلفة الأجور والمصاريف عند هذا التاريخ.</div><div class="bar"><button class="btn" id="dvok">✅ تأكيد التسليم</button><button class="btn alt" id="dvx">إلغاء</button></div></div>`;
   document.body.appendChild(o); o.onclick=e=>{ if(e.target===o||e.target.id==="dvx") return o.remove(); if(e.target.id==="dvok"){ const v=o.querySelector("#dvd").value; if(!v) return alert("اختر تاريخ التسليم"); m.stage=6; m.stageDate=v; m.hist=m.hist||{}; m.hist[6]=v; m.delivOk=1; save(); o.remove(); rerenderTab(); } }; }
-function setStage(x){ const [i,k]=x.split(":").map(Number), m=st.models[i]; if(!m) return; if(k===6){ askDeliv(i); return; } if(Number(m.stage)===k&&m.stage!=="") return; delete m.delivOk; m.stage=k; m.stageDate=st.today; m.hist=m.hist||{}; Object.keys(m.hist).forEach(j=>{ if(Number(j)>=k) delete m.hist[j]; }); m.hist[k]=st.today; save(); const y=window.scrollY; ({home:vHome,report:vReport,track:vTrack})[tab]&&({home:vHome,report:vReport,track:vTrack})[tab](); window.scrollTo(0,y); }
+const needEnd=m=>!!(m&&m.start&&!m.end&&m.stage!==undefined&&m.stage!==""&&Number(m.stage)>=2);
+function askEnd(i,cb){ const m=st.models[i]; if(!m) return; const o=document.createElement("div"); o.className="ebg"; o.style.zIndex=60;
+  o.innerHTML=`<div class="esheet"><div class="mh"><b>📅 تاريخ انتهاء المجموعة – ${esc(m.name||"")}</b></div><label>اختر تاريخ انتهاء المجموعة (آخر يوم خياطة)<input type="date" id="edd" value="${esc(m.end||m.stageDate||st.today||"")}"></label><div class="note">يبدأ من هذا التاريخ احتساب مرحلة ما بعد المجموعة، وعليه تُحسب قيمة اليوم الحقيقية للطلبية. بدونه تبقى الطلبية «جارية» وتأخذ تكلفة أكثر من حقها.</div><div class="bar"><button class="btn" id="edok">✅ تأكيد</button><button class="btn alt" id="edx">لاحقاً</button></div></div>`;
+  document.body.appendChild(o); o.onclick=e=>{ if(e.target===o||e.target.id==="edx"){ o.remove(); if(cb) cb(false); return; } if(e.target.id==="edok"){ const v=o.querySelector("#edd").value; if(!v) return alert("اختر التاريخ"); if(m.start&&v<m.start) return alert("تاريخ الانتهاء قبل تاريخ البداية"); m.end=v; save(); o.remove(); if(cb) cb(true); else rerenderTab(); } }; }
+function setStage(x,skip){ const [i,k]=x.split(":").map(Number), m=st.models[i]; if(!m) return; if(!skip&&k>=2&&m.start&&!m.end){ return askEnd(i,()=>setStage(x,true)); } if(k===6){ askDeliv(i); return; } if(Number(m.stage)===k&&m.stage!=="") return; delete m.delivOk; m.stage=k; m.stageDate=st.today; m.hist=m.hist||{}; Object.keys(m.hist).forEach(j=>{ if(Number(j)>=k) delete m.hist[j]; }); m.hist[k]=st.today; save(); const y=window.scrollY; ({home:vHome,report:vReport,track:vTrack})[tab]&&({home:vHome,report:vReport,track:vTrack})[tab](); window.scrollTo(0,y); }
 
 let trkF="all";
 function pcs(r){ const m=st.models[r.i]||{}, v=Number(m.pieces); return (m.pieces===undefined||m.pieces===""||isNaN(v)||v<0)?r.q:Math.min(Math.round(v),r.q); }
@@ -1672,12 +1687,13 @@ function vTrack(){ const R=compute(st), all=allM(R).map(r=>({r,si:stageInfo(r,R)
   const mm=i=>st.models[i]||{}; const rowCut=({r})=>`<div class="card mc"><div class="mh"><b>${esc(r.m)}</b><span class="bdg">التقطيع</span></div><div class="tk"><div class="tc"><label class="pl">عدد القطع <input inputmode="numeric" data-cq="${r.i}" value="${r.q||""}"></label><label class="pl">انتهاء التقطيع <input type="date" data-cd="${r.i}" value="${esc(mm(r.i).cutEnd||"")}"></label></div><div class="bar"><button class="btn" data-pass="${r.i}">فتح الطلبية / تمرير إلى مجموعة</button></div><div class="note">للتعديل أو الحذف: قسم «الطلبيات».</div></div></div>`;
   const row=({r,si})=>r.cut?rowCut({r}):`<div class="card mc"><div class="mh"><b>${esc(r.m)}</b><span class="tag">G${r.g} ${esc(GN(r.g))}</span><span class="bdg ${si.k===DLV?"ok":(si.days!==null&&si.days>stgDays()?"bad":"")}">${STAGES[si.k]}</span></div>
     <div class="stg">${STAGES.map((n,j)=>`<button class="sc ${j<si.k?"d":j===si.k?"c":""}" data-stg="${r.i}:${j}">${n}</button>`).join("")}</div>
-    <div class="tk"><div class="tc"><label class="pl">عدد القطع <input inputmode="numeric" data-pc="${r.i}" value="${pcs(r)}"></label><button class="sc" data-pcall="${r.i}">الكل (${fa(r.q)})</button>${si.k>=2&&si.k<DLV?`<button class="sc" data-nx="${r.i}:${si.k+1}">المرحلة التالية ←</button>`:""}</div>${si.k===DLV?`<div class="note ${mm(r.i).delivOk?"":"neg"}">${mm(r.i).delivOk?"✓ تاريخ التسليم: "+ddm(delivDate(mm(r.i))):"⚠ تاريخ التسليم غير مؤكد"} <button class="sc" data-dv="${r.i}">${mm(r.i).delivOk?"تعديل":"تأكيد التاريخ"}</button></div>`:""}${stageTrail(r,R,si)}</div></div>`;
+    <div class="tk"><div class="tc"><label class="pl">عدد القطع <input inputmode="numeric" data-pc="${r.i}" value="${pcs(r)}"></label><button class="sc" data-pcall="${r.i}">الكل (${fa(r.q)})</button>${si.k>=2&&si.k<DLV?`<button class="sc" data-nx="${r.i}:${si.k+1}">المرحلة التالية ←</button>`:""}</div>${needEnd(mm(r.i))?`<div class="note neg">⚠ تاريخ انتهاء المجموعة غير مؤكد — قيمة اليوم غير دقيقة <button class="sc" data-ed="${r.i}">تأكيد التاريخ</button></div>`:""}${si.k===DLV?`<div class="note ${mm(r.i).delivOk?"":"neg"}">${mm(r.i).delivOk?"✓ تاريخ التسليم: "+ddm(delivDate(mm(r.i))):"⚠ تاريخ التسليم غير مؤكد"} <button class="sc" data-dv="${r.i}">${mm(r.i).delivOk?"تعديل":"تأكيد التاريخ"}</button></div>`:""}${stageTrail(r,R,si)}</div></div>`;
   view.innerHTML=`<div class="bar">${!pdfReady()?"":window.claude?'<button class="btn" id="tkpdf">تصدير / مشاركة PDF</button>':'<button class="btn" id="tkpdf">حفظ PDF</button><button class="btn" id="tkshare">مشاركة PDF</button>'}</div>${trkSummary(all)}<div class="stg" style="margin:0 0 8px">${fb("all","الكل",all.length)}${STAGES.map((n,k)=>fb(k,n,cnt(k))).join("")}</div>
   ${shown.map(row).join("")||'<div class="note">لا موديلات في هذه المرحلة.</div>'}<div id="tpdf" style="display:none">${brand(R,trkPage(R,all))}</div>`;
   view.onclick=e=>{ const d=e.target.dataset; if(e.target.id==="tkpdf") return exportPdf(e.target,"#tpdf .rp","p","تقرير_المراحل.pdf"); if(e.target.id==="tkshare") return sharePdf(e.target,"#tpdf .rp","p","تقرير_المراحل.pdf"); if(d.tf!==undefined){ trkF=d.tf==="all"?"all":Number(d.tf); return vTrack(); }
     if(d.pass){ const m=st.models[+d.pass]; if(m){ mEdit=+d.pass; return go("models"); } }
     if(d.dv!==undefined) return askDeliv(+d.dv);
+    if(d.ed!==undefined) return askEnd(+d.ed);
     if(d.nx) return setStage(d.nx);
     if(d.stg) return setStage(d.stg); if(d.pcall) return setPieces(+d.pcall,(allM(R).find(x=>x.i===+d.pcall)||{q:0}).q); };
   view.onchange=e=>{ const d=e.target.dataset; if(d.pc!==undefined) setPieces(+d.pc,e.target.value); if(d.cq!==undefined){ st.models[+d.cq].qty=num(e.target.value)||0; save(); } if(d.cd!==undefined){ st.models[+d.cd].cutEnd=e.target.value; save(); } };
