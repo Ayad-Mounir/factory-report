@@ -149,7 +149,7 @@ html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}ht
 <main class="pg" id="tabFab" hidden>
 <div id="pendBanner" hidden></div><h2>المخزون (الأقمشة والرولوات)</h2><div class="muted">أضف المخزون من PDF أو صورة، ثم اضغط على سطر الرولو لتحديده وأنشئ الموديل من نفس الصفحة.</div>
 <div class="row"><button id="btnAddM" class="primary">➕ إضافة</button></div>
-<div class="row" id="addMenu" hidden><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings" hidden>⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden></div>
+<div class="row" id="addMenu" hidden><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings" hidden>⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button></div><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden>
 <div class="card" id="stkTop"><div id="stkSum" style="font-size:14px;margin-bottom:8px"></div><input id="stkQ" placeholder="🔎 بحث: قماش، مورد، لون…" style="width:100%"></div>
 <section class="card" id="readCard" hidden>
   <div class="row">
@@ -865,7 +865,7 @@ Rules: skip empty columns; read digits carefully; keep numbers exactly as writte
   const imgDel = (id) => idb().then((db) => { db.transaction("i", "readwrite").objectStore("i").delete(id); }).catch(() => {});
   const esc2 = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   function reModal(html) { const o = document.createElement("div"); o.style.cssText = "position:fixed;inset:0;background:#0007;z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px"; o.innerHTML = '<div dir="rtl" style="background:var(--card,#fff);color:var(--fg,#111);border-radius:12px;padding:14px;max-width:420px;width:100%;max-height:85vh;overflow:auto;font-size:14px">' + html + '</div>'; document.body.appendChild(o); o.close = () => o.remove(); return o; }
-  function pickFile(cam) { return new Promise((res) => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; if (cam) i.setAttribute("capture", "environment"); i.onchange = () => res(i.files[0] || null); i.click(); }); }
+  function pickFile(cam) { return new Promise((res) => { const i = document.createElement("input"); i.type = "file"; i.accept = "image/*"; i.hidden = true; if (cam) i.setAttribute("capture", "environment"); document.body.appendChild(i); i.onchange = () => { const f = i.files[0] || null; i.remove(); res(f); }; i.click(); }); }
   async function reAnalyse(si) {
     const s = sheets[si]; if (!s) return;
     const saved = await imgGet(s.id);
