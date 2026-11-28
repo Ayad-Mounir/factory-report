@@ -1935,33 +1935,37 @@ view.addEventListener("click",e=>{ if(tab!=="home"&&tab!=="menu") return; const 
   exportPdf(b,k==="all"?"#mpall .rp":"#mp"+k+" .rp","p",nm+"_"+mpK+".pdf"); });
 
 /* ---------- تكلفة الطلبية التفصيلية ---------- */
-function ocFab(m){
-  let cards=[],sheets=[]; try{ cards=(JSON.parse(localStorage.getItem("systeme-coupe-v1")||"{}").cards)||[]; }catch(e){} try{ sheets=JSON.parse(localStorage.getItem("fab-sheets-v1")||"[]")||[]; }catch(e){}
-  const c=cards.find(x=>(m.uid&&x.mid===m.uid)||(m.cid&&x.id===m.cid)); if(!c) return {linked:false,lines:[],tot:0,miss:0};
+function ocCards(){ let cards=[],sheets=[]; try{ cards=(JSON.parse(localStorage.getItem("systeme-coupe-v1")||"{}").cards)||[]; }catch(e){} try{ sheets=JSON.parse(localStorage.getItem("fab-sheets-v1")||"[]")||[]; }catch(e){} return {cards,sheets}; }
+function ocFab(c,sheets){
   const lines=[]; let tot=0,miss=0;
-  ((c.sh&&c.sh.blocks)||[]).forEach(b=>{ const on=(b.rolls||[]).filter(r=>r.on!==false); if(!on.length) return; const sh=sheets.find(z=>z.id===b.sid), pr=num((sh&&sh.prix)||b.prix)||0, u=(sh&&sh.unite)||b.unite||"KL", q=on.reduce((a,r)=>a+(num(r.l)||0),0), amt=q*pr; if(!pr) miss++; tot+=amt; lines.push({n:(b.tissu?b.tissu+" · ":"")+(b.name||""),sup:b.fourn||"",ro:on.length,q,u,pr,amt}); });
-  return {linked:true,lines,tot,miss};
+  ((c.sh&&c.sh.blocks)||[]).forEach(b=>{ const on=(b.rolls||[]).filter(r=>r.on!==false); if(!on.length) return; const sh=sheets.find(z=>z.id===b.sid), pr=num((sh&&sh.prix)||b.prix)||0, u=(sh&&sh.unite)||b.unite||"KL", q=on.reduce((a,r)=>a+(num(r.l)||0),0), amt=q*pr; if(!pr) miss++; tot+=amt; lines.push({n:(b.tissu?b.tissu+" · ":"")+(b.name||""),ro:on.length,q,u,pr,amt}); });
+  return {lines,tot,miss};
 }
 function ocData(R){
-  return profitRows(R).filter(x=>!x.tail).map(x=>{ const F=ocFab(x.m), q=x.r.q||0, oth=x.gp+x.wh+x.wm+x.fx, tot=oth+F.tot; return {x,F,q,tot,pc:q?tot/q:0,sp:x.r.sp,pf:(x.r.sp!==null&&q)?x.r.sp-tot/q:null}; });
+  const {cards,sheets}=ocCards(), rows=profitRows(R).filter(x=>!x.tail), by=new Map(), out=[];
+  rows.forEach(x=>{ const m=x.m, c=cards.find(z=>(m.uid&&z.mid===m.uid)||(m.cid&&z.id===m.cid)); if(!c){ out.push({name:x.r.m,card:null,ms:[x]}); return; } if(!by.has(c.id)){ const o={name:c.name||x.r.m,card:c,ms:[]}; by.set(c.id,o); out.push(o); } by.get(c.id).ms.push(x); });
+  return out.map(o=>{ const F=o.card?ocFab(o.card,sheets):{lines:[],tot:0,miss:0}, q=Math.max(num(o.card&&o.card.qty)||0,...o.ms.map(x=>x.r.q||0)), gp=o.ms.reduce((a,x)=>a+x.gp,0), wh=o.ms.reduce((a,x)=>a+x.wh,0), wm=o.ms.reduce((a,x)=>a+x.wm,0), fx=o.ms.reduce((a,x)=>a+x.fx,0), tot=F.tot+gp+wh+wm+fx, sx=o.ms.find(x=>x.r.sp!==null), sp=sx?sx.r.sp:null;
+    return {...o,F,q,gp,wh,wm,fx,tot,pc:q?tot/q:0,sp,pf:(sp!==null&&q)?sp-tot/q:null,linked:!!o.card}; });
 }
 function ocTable(o){
-  const x=o.x, f=n=>fa(n), row=(l,d,v,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${d||""}</td><td>${v}</td></tr>`;
+  const f=n=>fa(n), row=(l,d,v,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${d||""}</td><td>${v}</td></tr>`;
   let h=`<table><tr><th>البند</th><th>التفصيل</th><th>المبلغ (د)</th></tr>`;
-  if(!o.F.linked) h+=row("القماش","لا تقطيع مرتبط","—"); else if(!o.F.lines.length) h+=row("القماش","لا رولوات محدَّدة","—");
+  if(!o.linked) h+=row("القماش","لا تقطيع مرتبط","—"); else if(!o.F.lines.length) h+=row("القماش","لا رولوات محدَّدة","—");
   o.F.lines.forEach(l=>{ h+=row("القماش: "+esc(l.n),fa(l.ro)+" رولو · "+fa(l.q,2)+" "+l.u+" × "+(l.pr?fa(l.pr,2):"؟ بلا سعر"),l.pr?f(l.amt):"—"); });
-  h+=row("ثمن المجموعة (G"+x.r.g+")",f(o.q)+" × "+fa(x.r.p,2),f(x.gp))+row("عمال الساعات","",f(x.wh))+row("عمال الشهر","",f(x.wm))+row("المصاريف الثابتة","",f(x.fx))+row("مجموع تكلفة الطلبية","",f(o.tot),1)+row("التكلفة الفعلية للقطعة","",fa(o.pc,2),1);
+  o.ms.forEach(x=>{ h+=row("ثمن المجموعة G"+x.r.g+(o.ms.length>1?" ("+esc(x.r.m)+")":""),f(x.r.q)+" × "+fa(x.r.p,2),f(x.gp)); });
+  h+=row("عمال الساعات","",f(o.wh))+row("عمال الشهر","",f(o.wm))+row("المصاريف الثابتة","",f(o.fx))+row("مجموع تكلفة الطلبية","",f(o.tot),1)+row("عدد القطع","",f(o.q))+row("التكلفة الفعلية للقطعة","",fa(o.pc,2),1);
   if(o.sp!==null) h+=row("ثمن بيع القطعة","",fa(o.sp,2))+row("الربح للقطعة","",fa(o.pf,2));
   return h+"</table>";
 }
+const ocT=o=>esc(o.name)+" · "+o.ms.map(x=>"G"+x.r.g).filter((v,i,a)=>a.indexOf(v)===i).join(" + ");
 function vOCost(){
   const R=compute(st), D=ocData(R), ok=pdfReady(), btn=(id,l)=>ok?`<button class="btn" id="${id}">${l}</button>`:"";
-  const warn=o=>!o.F.linked?"⚠ لا تقطيع مرتبط":(o.F.miss?"⚠ سعر قماش ناقص":"");
+  const warn=o=>!o.linked?"⚠ لا تقطيع مرتبط":(o.F.miss?"⚠ سعر قماش ناقص":"");
   view.innerHTML=`<div class="card"><b>🧮 تكلفة الطلبية</b><div class="note">لكل طلبية: القماش المسحوب من المخزون × سعره + ثمن المجموعة + عمال الساعات + عمال الشهر + المصاريف الثابتة، ثم التكلفة الفعلية للقطعة.</div>
   ${D.length?"":'<div class="note">لا طلبيات في هذا الشهر.</div>'}
-  ${D.map((o,k)=>`<details class="orow" style="padding:8px 10px;margin-bottom:6px"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span><b>G${o.x.r.g} · ${esc(o.x.r.m)}</b> <small style="color:var(--mut)">${fa(o.q)} قطعة ${warn(o)}</small></span><b>${fa(o.pc,2)} د/قطعة</b></summary><div class="scroll" style="margin-top:8px">${ocTable(o).replace("<table>",'<table class="g">')}</div><div class="bar" style="margin-top:8px">${btn("ocP"+k,"🖨 PDF الطلبية")}</div></details>`).join("")}
+  ${D.map((o,k)=>`<details class="orow" style="padding:8px 10px;margin-bottom:6px"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span><b>${ocT(o)}</b> <small style="color:var(--mut)">${fa(o.q)} قطعة ${warn(o)}</small></span><b>${fa(o.pc,2)} د/قطعة</b></summary><div class="scroll" style="margin-top:8px">${ocTable(o).replace("<table>",'<table class="g">')}</div><div class="bar" style="margin-top:8px">${btn("ocP"+k,"🖨 PDF الطلبية")}</div></details>`).join("")}
   <div class="bar" style="margin-top:8px">${btn("ocPall","📄 طباعة الكل PDF")}</div>
-  <div id="ocpg" style="display:none">${D.map((o,k)=>`<div id="oc${k}">${brand(R,`<div class="rp"><h1>تكلفة الطلبية – G${o.x.r.g} · ${esc(o.x.r.m)}</h1><div class="sub">${fa(o.q)} قطعة | المبالغ بالدرهم</div>${ocTable(o)}</div>`)}</div>`).join("")}<div id="ocall">${brand(R,D.map(o=>`<div class="rp"><h1>تكلفة الطلبية – G${o.x.r.g} · ${esc(o.x.r.m)}</h1><div class="sub">${fa(o.q)} قطعة | المبالغ بالدرهم</div>${ocTable(o)}</div>`).join(""))}</div></div></div>`;
+  <div id="ocpg" style="display:none">${D.map((o,k)=>`<div id="oc${k}">${brand(R,`<div class="rp"><h1>تكلفة الطلبية – ${ocT(o)}</h1><div class="sub">${fa(o.q)} قطعة | المبالغ بالدرهم</div>${ocTable(o)}</div>`)}</div>`).join("")}<div id="ocall">${brand(R,D.map(o=>`<div class="rp"><h1>تكلفة الطلبية – ${ocT(o)}</h1><div class="sub">${fa(o.q)} قطعة | المبالغ بالدرهم</div>${ocTable(o)}</div>`).join(""))}</div></div></div>`;
   view.oninput=null; view.onchange=null; view.onclick=e=>{ const b=e.target.closest("button"); if(!b) return; const m=/^ocP(\d+|all)$/.exec(b.id||""); if(!m) return; exportPdf(b,m[1]==="all"?"#ocall .rp":"#oc"+m[1]+" .rp","p",(m[1]==="all"?"تكلفة_الطلبيات":"تكلفة_طلبية_"+m[1])+"_"+st.year+"-"+st.month+".pdf"); };
 }
 
