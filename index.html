@@ -1879,8 +1879,8 @@ function mpData(k){
   const ex=(s2.charges||[]).map(x=>({n:String(x.name||"").trim(),a:num(x.amount)||0})).filter(x=>x.n||x.a);
   const gm={}; R.M.forEach(r=>{ const g=String(r.g); const o=gm[g]||(gm[g]={g,n:0,q:0,v:0,w:0,fin:0}); o.n++; o.q+=r.q||0; o.v+=(r.p||0)*(r.q||0); o.w+=r.wages||0; if(r.fin) o.fin++; });
   const tg=k===cur?st.models:((st.arch[k]||{}).models||[]);
-  const mr=R.M.map(r=>{ const m=tg[r.i]||{}; return {i:r.i,g:String(r.g),name:r.m,q:r.q||0,p:r.p||0,amt:(r.q||0)*(r.p||0),fin:!!r.fin,pay:m.pay||"",pd:m.payDate||""}; }).sort((a,b)=>a.g-b.g||a.i-b.i);
-  const gr=Object.values(gm).sort((a,b)=>a.g-b.g);
+  const mr=R.M.map(r=>{ const m=tg[r.i]||{}; return {i:r.i,g:String(r.g),name:r.m,q:r.q||0,p:r.p||0,amt:(r.q||0)*(r.p||0),fin:!!r.fin,pay:m.pay||"",pd:m.payDate||""}; }).filter(x=>!(x.pay==="done"&&/^\d{4}-\d{2}/.test(x.pd)&&x.pd.slice(0,7)<k.split("-")[0]+"-"+String(k.split("-")[1]).padStart(2,"0"))).sort((a,b)=>a.g-b.g||a.i-b.i);
+  const gr=[...new Set(mr.map(x=>x.g))].sort((a,b)=>a-b).map(g=>{ const l=mr.filter(x=>x.g===g); return {g,n:l.length,q:l.reduce((s,x)=>s+x.q,0),v:l.reduce((s,x)=>s+x.amt,0),w:0}; });
   return {R,hw,mw,ex,gr,mr,tg,lbl:MONTHS[+k.split("-")[1]-1]+" "+k.split("-")[0]};
 }
 function mpSections(D){
@@ -1889,17 +1889,15 @@ function mpSections(D){
   const Cr=D.hw.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${fa(x.d)}</td><td>${fa(x.h,1)}</td><td>${fa(x.rate,2)}</td><td>${f(x.gross)}</td><td>${f(x.adv)}</td><td>${f(x.net)}</td></tr>`).join("");
   const gf=D.gr.filter(x=>mpG==="all"||x.g===mpG), mf=D.mr.filter(x=>mpG==="all"||x.g===mpG);
   const G_q=gf.reduce((s,x)=>s+x.q,0), G_v=gf.reduce((s,x)=>s+x.v,0), G_w=gf.reduce((s,x)=>s+x.w,0);
-  const Gr=gf.map(x=>`<tr><td>G${x.g}</td><td>${fa(x.n)}</td><td>${f(x.q)}</td><td>${f(x.v)}</td><td>${f(x.w)}</td><td>${x.q?fa(x.w/x.q,2):"—"}</td></tr>`).join("");
-  const st_=x=>x.pay==="done"?"✅ مؤدّى "+esc(x.pd):x.pay==="plan"?"⏳ مبرمج للأداء":x.fin?"غير مؤدّى":"جارية";
-  const sel=mf.filter(x=>x.pay==="plan"), selT=sel.reduce((s,x)=>s+x.amt,0), doneT=mf.filter(x=>x.pay==="done").reduce((s,x)=>s+x.amt,0), dueT=mf.filter(x=>x.fin&&x.pay!=="done").reduce((s,x)=>s+x.amt,0);
-  const Mr2=mf.map(x=>`<tr><td>G${x.g}</td><td class="l">${esc(x.name)}</td><td>${f(x.q)}</td><td>${f(x.amt)}</td><td>${st_(x)}</td></tr>`).join("");
+  const st_=x=>x.pay==="done"?"✅ مؤدّى "+esc(x.pd):x.pay==="plan"?"⏳ مبرمج للأداء":x.fin?"غير مؤدّى":"غير مؤدّى · جارية";
+  const sel=mf.filter(x=>x.pay==="plan"), selT=sel.reduce((s,x)=>s+x.amt,0), doneT=mf.filter(x=>x.pay==="done").reduce((s,x)=>s+x.amt,0), dueT=mf.filter(x=>x.pay!=="done").reduce((s,x)=>s+x.amt,0);
+  const Mr2=mf.map(x=>`<tr><td>G${x.g}</td><td class="l">${esc(x.name)}</td><td>${f(x.q)}</td><td>${fa(x.p,2)}</td><td>${f(x.amt)}</td><td>${st_(x)}</td></tr>`).join("");
   const gl=mpG==="all"?"كل المجموعات":"G"+mpG;
-  const Gt=T(["المجموعة","موديلات","القطع","قيمة الإنتاج","أجور المجموعة","أجر/قطعة"],Gr,`<tr class="tot"><td class="l">المجموع</td><td>${fa(gf.reduce((s,x)=>s+x.n,0))}</td><td>${f(G_q)}</td><td>${f(G_v)}</td><td>${f(G_w)}</td><td>${G_q?fa(G_w/G_q,2):"—"}</td></tr>`)
-    +T(["المجموعة","الطلبية","القطع","المبلغ المستحق","الأداء"],Mr2,`<tr class="tot"><td colspan="3" class="l">المبرمج للأداء ${f(selT)} · المؤدّى ${f(doneT)} · المتبقي غير المؤدّى</td><td colspan="2">${f(dueT)}</td></tr>`);
+  const Gt=T(["المجموعة","الموديل","العدد","ثمن القطعة","المجموع","الأداء"],Mr2,`<tr class="tot"><td colspan="2" class="l">المجموع</td><td>${f(mf.reduce((s,x)=>s+x.q,0))}</td><td></td><td>${f(mf.reduce((s,x)=>s+x.amt,0))}</td><td></td></tr>`);
   const chipG=v=>`<button class="sc ${mpG===v?"c":""}" data-mpg="${v}">${v==="all"?"كل المجموعات":"G"+v}</button>`;
   const Gui=`<div class="stg" style="margin:4px 0 8px">${chipG("all")}${D.gr.map(x=>chipG(x.g)).join("")}</div>`+
-    (mf.length?mf.map(x=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-mpsel="${x.i}" ${x.pay==="plan"?"checked":""} ${(!x.fin||x.pay==="done")?"disabled":""}><span style="flex:1"><b>G${x.g}</b> ${esc(x.name)} <small style="color:var(--mut)">${f(x.q)} قطعة</small><br><small>${st_(x)}</small></span><b>${f(x.amt)} د</b>${x.pay==="done"?`<button class="btn alt" data-mpundo="${x.i}" style="padding:4px 8px">↩</button>`:""}</label>`).join(""):'<div class="note">لا طلبيات.</div>')+
-    `<div class="note" style="margin-top:6px">حدّد الطلبيات المنتهية التي ستؤدّى، ثم اضغط «تأكيد الأداء» عند الدفع الفعلي. المتبقي غير المؤدّى: <b>${f(dueT)} د</b></div><div class="bar" style="margin-top:6px"><button class="btn" id="mpconf" ${sel.length?"":"disabled"}>✔ تأكيد أداء المحدد (${f(selT)} د)</button></div>`+Gt.replace("<table>",'<table class="g">');
+    (mf.length?mf.map(x=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-mpsel="${x.i}" ${x.pay==="plan"?"checked":""} ${x.pay==="done"?"disabled":""}><span style="flex:1"><b>G${x.g}</b> ${esc(x.name)} <small style="color:var(--mut)">${f(x.q)} قطعة</small><br><small>${st_(x)}</small></span><b>${f(x.amt)} د</b>${x.pay==="done"?`<button class="btn alt" data-mpundo="${x.i}" style="padding:4px 8px">↩</button>`:""}</label>`).join(""):'<div class="note">لا طلبيات.</div>')+
+    `<div class="note" style="margin-top:6px">حدّد الطلبيات التي ستؤدّى (ولو لم تنتهِ بعد)، ثم اضغط «تأكيد الأداء» عند الدفع الفعلي. المتبقي غير المؤدّى: <b>${f(dueT)} د</b></div><div class="bar" style="margin-top:6px"><button class="btn" id="mpconf" ${sel.length?"":"disabled"}>✔ تأكيد أداء المحدد (${f(selT)} د)</button></div>`+Gt.replace("<table>",'<table class="g">');
   const E_t=D.ex.reduce((s,x)=>s+x.a,0), Er=D.ex.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${f(x.a)}</td></tr>`).join("");
   const M_t=D.mw.reduce((s,x)=>s+x.a,0), Mr=D.mw.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${f(x.a)}</td></tr>`).join("");
   const tot=(span,v)=>`<tr class="tot"><td colspan="${span}" class="l">المجموع</td><td>${v}</td></tr>`;
