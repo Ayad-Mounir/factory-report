@@ -1864,6 +1864,77 @@ view.addEventListener("click",e=>{ if(tab!=="quick") return; const b=e.target.cl
 { const f=vForms; vForms=function(){ f(); decor("forms"); }; }
 view.addEventListener("click",e=>{ const s=e.target.closest("[data-sub]"); if(s){ e.stopImmediatePropagation(); e.preventDefault(); return go(s.dataset.sub); }
   const w=e.target.closest("#todoWrap"); if(w){ const b=e.target.closest("button"); if(!b) return; e.stopImmediatePropagation(); if(b.dataset.go) return go(b.dataset.go); if(b.dataset.setday){ st.today=b.dataset.setday; save(); return go(tab); } if(b.id==="tgbk"){ b.disabled=true; return doBackup(true).then(()=>go(tab)); } } },true);
+/* ---------- بطاقة أداء الشهر (الرئيسية) ---------- */
+let mpK=null, mpG="all", mpGO=false;
+function mpKeys(){ const cur=st.year+"-"+st.month; const ks=Object.keys(st.arch||{}); if(!ks.includes(cur)) ks.push(cur); return ks.sort((a,b)=>{ const x=a.split("-").map(Number), y=b.split("-").map(Number); return (y[0]*12+y[1])-(x[0]*12+x[1]); }); }
+function mpData(k){
+  const cur=st.year+"-"+st.month; let s2=st;
+  if(k!==cur){ const a=st.arch[k], p=k.split("-").map(Number); s2=JSON.parse(JSON.stringify(st));
+    s2.year=p[0]; s2.month=p[1]; if(a.w){ s2.workers=JSON.parse(JSON.stringify(a.w)); if(a.groups) s2.groups=JSON.parse(JSON.stringify(a.groups)); } else s2.workers.forEach(w=>{ const o=(a.hours||[]).find(x=>x.n===w.name); w.hours=o?o.h:{}; w.advance=o?o.a:""; });
+    s2.heads=a.heads||{}; if(a.charges) s2.charges=a.charges; s2.monthly=a.monthly||[]; s2.models=a.models||[];
+    s2.today=p[0]+"-"+String(p[1]).padStart(2,"0")+"-"+String(new Date(Date.UTC(p[0],p[1],0)).getUTCDate()).padStart(2,"0"); }
+  const R=compute(s2);
+  const hw=(s2.workers||[]).map(w=>{ let h=0,d=0; Object.keys(w.hours||{}).forEach(x=>{ const v=String(w.hours[x]??"").trim(); if(v===""||isAbs(v)) return; const n=num(v)||0; if(n>0){ h+=n; d++; } }); const rate=num(w.rate)||0, adv=num(w.advance)||0; return {n:String(w.name||"").trim(),h,d,rate,gross:h*rate,adv,net:h*rate-adv}; }).filter(x=>x.n||x.h);
+  const mw=(s2.monthly||[]).map(x=>({n:String(x.name||"").trim(),a:num(x.amount)||0})).filter(x=>x.n||x.a);
+  const ex=(s2.charges||[]).map(x=>({n:String(x.name||"").trim(),a:num(x.amount)||0})).filter(x=>x.n||x.a);
+  const gm={}; R.M.forEach(r=>{ const g=String(r.g); const o=gm[g]||(gm[g]={g,n:0,q:0,v:0,w:0,fin:0}); o.n++; o.q+=r.q||0; o.v+=(r.p||0)*(r.q||0); o.w+=r.wages||0; if(r.fin) o.fin++; });
+  const tg=k===cur?st.models:((st.arch[k]||{}).models||[]);
+  const mr=R.M.map(r=>{ const m=tg[r.i]||{}; return {i:r.i,g:String(r.g),name:r.m,q:r.q||0,p:r.p||0,amt:(r.q||0)*(r.p||0),fin:!!r.fin,pay:m.pay||"",pd:m.payDate||""}; }).sort((a,b)=>a.g-b.g||a.i-b.i);
+  const gr=Object.values(gm).sort((a,b)=>a.g-b.g);
+  return {R,hw,mw,ex,gr,mr,tg,lbl:MONTHS[+k.split("-")[1]-1]+" "+k.split("-")[0]};
+}
+function mpSections(D){
+  const f=n=>fa(n), T=(cols,body,foot)=>`<table><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr>${body||`<tr><td colspan="${cols.length}">—</td></tr>`}${foot||""}</table>`, P=(t,tbl)=>`<div class="rp"><h1>${t} – ${D.lbl}</h1><div class="sub">المبالغ بالدرهم</div>${tbl}</div>`;
+  const C_h=D.hw.reduce((s,x)=>s+x.h,0), C_g=D.hw.reduce((s,x)=>s+x.gross,0), C_a=D.hw.reduce((s,x)=>s+x.adv,0), C_n=D.hw.reduce((s,x)=>s+x.net,0);
+  const Cr=D.hw.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${fa(x.d)}</td><td>${fa(x.h,1)}</td><td>${fa(x.rate,2)}</td><td>${f(x.gross)}</td><td>${f(x.adv)}</td><td>${f(x.net)}</td></tr>`).join("");
+  const gf=D.gr.filter(x=>mpG==="all"||x.g===mpG), mf=D.mr.filter(x=>mpG==="all"||x.g===mpG);
+  const G_q=gf.reduce((s,x)=>s+x.q,0), G_v=gf.reduce((s,x)=>s+x.v,0), G_w=gf.reduce((s,x)=>s+x.w,0);
+  const Gr=gf.map(x=>`<tr><td>G${x.g}</td><td>${fa(x.n)}</td><td>${f(x.q)}</td><td>${f(x.v)}</td><td>${f(x.w)}</td><td>${x.q?fa(x.w/x.q,2):"—"}</td></tr>`).join("");
+  const st_=x=>x.pay==="done"?"✅ مؤدّى "+esc(x.pd):x.pay==="plan"?"⏳ مبرمج للأداء":x.fin?"غير مؤدّى":"جارية";
+  const sel=mf.filter(x=>x.pay==="plan"), selT=sel.reduce((s,x)=>s+x.amt,0), doneT=mf.filter(x=>x.pay==="done").reduce((s,x)=>s+x.amt,0), dueT=mf.filter(x=>x.fin&&x.pay!=="done").reduce((s,x)=>s+x.amt,0);
+  const Mr2=mf.map(x=>`<tr><td>G${x.g}</td><td class="l">${esc(x.name)}</td><td>${f(x.q)}</td><td>${f(x.amt)}</td><td>${st_(x)}</td></tr>`).join("");
+  const gl=mpG==="all"?"كل المجموعات":"G"+mpG;
+  const Gt=T(["المجموعة","موديلات","القطع","قيمة الإنتاج","أجور المجموعة","أجر/قطعة"],Gr,`<tr class="tot"><td class="l">المجموع</td><td>${fa(gf.reduce((s,x)=>s+x.n,0))}</td><td>${f(G_q)}</td><td>${f(G_v)}</td><td>${f(G_w)}</td><td>${G_q?fa(G_w/G_q,2):"—"}</td></tr>`)
+    +T(["المجموعة","الطلبية","القطع","المبلغ المستحق","الأداء"],Mr2,`<tr class="tot"><td colspan="3" class="l">المبرمج للأداء ${f(selT)} · المؤدّى ${f(doneT)} · المتبقي غير المؤدّى</td><td colspan="2">${f(dueT)}</td></tr>`);
+  const chipG=v=>`<button class="sc ${mpG===v?"c":""}" data-mpg="${v}">${v==="all"?"كل المجموعات":"G"+v}</button>`;
+  const Gui=`<div class="stg" style="margin:4px 0 8px">${chipG("all")}${D.gr.map(x=>chipG(x.g)).join("")}</div>`+
+    (mf.length?mf.map(x=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line)"><input type="checkbox" data-mpsel="${x.i}" ${x.pay==="plan"?"checked":""} ${(!x.fin||x.pay==="done")?"disabled":""}><span style="flex:1"><b>G${x.g}</b> ${esc(x.name)} <small style="color:var(--mut)">${f(x.q)} قطعة</small><br><small>${st_(x)}</small></span><b>${f(x.amt)} د</b>${x.pay==="done"?`<button class="btn alt" data-mpundo="${x.i}" style="padding:4px 8px">↩</button>`:""}</label>`).join(""):'<div class="note">لا طلبيات.</div>')+
+    `<div class="note" style="margin-top:6px">حدّد الطلبيات المنتهية التي ستؤدّى، ثم اضغط «تأكيد الأداء» عند الدفع الفعلي. المتبقي غير المؤدّى: <b>${f(dueT)} د</b></div><div class="bar" style="margin-top:6px"><button class="btn" id="mpconf" ${sel.length?"":"disabled"}>✔ تأكيد أداء المحدد (${f(selT)} د)</button></div>`+Gt.replace("<table>",'<table class="g">');
+  const E_t=D.ex.reduce((s,x)=>s+x.a,0), Er=D.ex.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${f(x.a)}</td></tr>`).join("");
+  const M_t=D.mw.reduce((s,x)=>s+x.a,0), Mr=D.mw.map(x=>`<tr><td class="l">${esc(x.n)||"—"}</td><td>${f(x.a)}</td></tr>`).join("");
+  const tot=(span,v)=>`<tr class="tot"><td colspan="${span}" class="l">المجموع</td><td>${v}</td></tr>`;
+  const Ct=T(["العامل","الأيام","الساعات","د/ساعة","الأجر","سلفة","الصافي"],Cr,`<tr class="tot"><td colspan="2" class="l">المجموع</td><td>${fa(C_h,1)}</td><td></td><td>${f(C_g)}</td><td>${f(C_a)}</td><td>${f(C_n)}</td></tr>`);
+  const Et=T(["البند","المبلغ"],Er,tot(1,f(E_t))), Mt=T(["العامل","الأجر"],Mr,tot(1,f(M_t)));
+  return [
+   {k:"C",t:"أداء عمال الساعات",tot:fa(C_h,1)+" س",info:fa(D.hw.length)+" عامل · صافي "+f(C_n)+" د",tbl:Ct},
+   {k:"G",t:"أداء المجموعات",tot:f(G_v)+" د",info:gl+" · "+f(G_q)+" قطعة",tbl:Gui,pg:Gt},
+   {k:"E",t:"أداء المصاريف",tot:f(E_t)+" د",info:fa(D.ex.length)+" بند",tbl:Et},
+   {k:"M",t:"أداء عمال الشهر (الأجور)",tot:f(M_t)+" د",info:fa(D.mw.length)+" عامل",tbl:Mt}
+  ].map(x=>({...x,page:P(x.t+(x.k==="G"?" ("+gl+")":""),x.pg||x.tbl)}));
+}
+function mpCard(){
+  const ks=mpKeys(), cur=st.year+"-"+st.month; if(!mpK||!ks.includes(mpK)) mpK=cur;
+  let D; try{ D=mpData(mpK); }catch(e){ console.error(e); return ""; }
+  const S=mpSections(D), ok=pdfReady(), btn=(id,l)=>ok?`<button class="btn" id="${id}">${l}</button>`:"";
+  const chip=k=>{ const p=k.split("-"); return `<button class="sc ${mpK===k?"c":""}" data-mpk="${k}">${MONTHS[+p[1]-1]} ${p[0]}</button>`; };
+  return `<div class="card" id="mpc"><b>📅 أداء الشهر</b><div class="note">اختر الشهر ثم افتح القسم أو اطبعه PDF.</div>
+  <div class="stg" style="margin:6px 0 10px">${ks.map(chip).join("")}</div>
+  ${S.map(s=>`<details class="orow" ${s.k==="G"&&mpGO?"open":""} style="padding:8px 10px;margin-bottom:6px"><summary style="cursor:pointer;display:flex;justify-content:space-between;gap:8px"><span><b>${s.t}</b> <small style="color:var(--mut)">${s.info}</small></span><b>${s.tot}</b></summary><div class="scroll" style="margin-top:8px">${s.k==="G"?s.tbl:s.tbl.replace("<table>",'<table class="g">')}</div><div class="bar" style="margin-top:8px">${btn("mp"+s.k+"pdf","🖨 "+s.t+" PDF")}</div></details>`).join("")}
+  <div class="bar" style="margin-top:8px">${btn("mpallpdf","📄 طباعة الكل PDF")}</div>
+  <div id="mppg" style="display:none">${S.map(s=>`<div id="mp${s.k}">${brand(D.R,s.page)}</div>`).join("")}<div id="mpall">${brand(D.R,S.map(s=>s.page).join(""))}</div></div></div>`;
+}
+{ const f=vHome; vHome=function(){ f(); const k=view.querySelector(".kts"); const h=mpCard(); if(h){ if(k) k.insertAdjacentHTML("afterend",h); else view.insertAdjacentHTML("afterbegin",h); } }; }
+{ const f=vMenu; vMenu=function(){ f(); const k=view.querySelector(".mgrid"); const h=mpCard(); if(h&&k) k.insertAdjacentHTML("afterend",'<div style="margin-top:10px">'+h+'</div>'); }; }
+function mpRe(){ (tab==="menu"?vMenu:vHome)(); const d=document.getElementById("mpc"); if(d) d.scrollIntoView({block:"start"}); }
+view.addEventListener("change",e=>{ const t=e.target; if(tab!=="home"&&tab!=="menu"||!t.dataset||t.dataset.mpsel===undefined) return; const D=mpData(mpK), m=D.tg[+t.dataset.mpsel]; if(m){ m.pay=t.checked?"plan":""; save(); } mpGO=true; mpRe(); });
+view.addEventListener("click",e=>{ if(tab!=="home"&&tab!=="menu") return; const b=e.target.closest("button"); if(!b) return;
+  if(b.dataset.mpg){ mpG=b.dataset.mpg; mpGO=true; mpRe(); return; }
+  if(b.dataset.mpundo){ const D=mpData(mpK), m=D.tg[+b.dataset.mpundo]; if(m){ m.pay=""; m.payDate=""; save(); } mpGO=true; mpRe(); return; }
+  if(b.id==="mpconf"){ const D=mpData(mpK), sel=D.mr.filter(x=>x.pay==="plan"&&(mpG==="all"||x.g===mpG)); if(!sel.length) return; const d=prompt("تاريخ الأداء الفعلي (YYYY-MM-DD)",new Date().toISOString().slice(0,10)); if(!d) return; sel.forEach(x=>{ const m=D.tg[x.i]; if(m){ m.pay="done"; m.payDate=d; } }); save(); mpGO=true; mpRe(); return; }
+  if(b.dataset.mpk){ mpK=b.dataset.mpk; (tab==="menu"?vMenu:vHome)(); const d=document.getElementById("mpc"); if(d) d.scrollIntoView({block:"start"}); return; }
+  const m=/^mp([CGEM]|all)pdf$/.exec(b.id||""); if(!m) return; const k=m[1], nm={C:"أداء_عمال_الساعات",G:"أداء_المجموعات",E:"أداء_المصاريف",M:"أداء_عمال_الأجور",all:"أداء_الشهر"}[k];
+  exportPdf(b,k==="all"?"#mpall .rp":"#mp"+k+" .rp","p",nm+"_"+mpK+".pdf"); });
+
 go(tab);
 if("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(()=>{});
 })();
