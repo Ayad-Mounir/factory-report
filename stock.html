@@ -149,7 +149,7 @@ html.embed #tabMenu{display:block!important}html.embed #wz .pt td{height:34px}ht
 <main class="pg" id="tabFab" hidden>
 <div id="pendBanner" hidden></div><h2>المخزون (الأقمشة والرولوات)</h2><div class="muted">أضف المخزون من PDF أو صورة، ثم اضغط على سطر الرولو لتحديده وأنشئ الموديل من نفس الصفحة.</div>
 <div class="row"><button id="btnAddM" class="primary">➕ إضافة</button></div>
-<div class="row" id="addMenu" hidden><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings" hidden>⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button></div><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden>
+<div class="row" id="addMenu" hidden><button id="btnTheme">🌙 الوضع الليلي</button><button id="btnSettings" hidden>⚙︎ الإعدادات (مفتاح API)</button><button id="btnBlankFab">🖨️ ورقة فارغة للطباعة</button><button id="btnPdfIn" class="primary">📄 إضافة مخزون من PDF</button><button id="btnCam" class="primary">📷 تصوير ورقة مباشرة</button><button id="btnImgIn" class="primary">🖼️ اختيار صورة من المعرض</button></div><input type="file" id="galIn" accept="image/*" multiple hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden><input type="file" id="pdfIn" accept="application/pdf" multiple hidden>
 <div class="card" id="stkTop"><div id="stkSum" style="font-size:14px;margin-bottom:8px"></div><input id="stkQ" placeholder="🔎 بحث: قماش، مورد، لون…" style="width:100%"></div>
 <section class="card" id="readCard" hidden>
   <div class="row">
@@ -1580,6 +1580,8 @@ function parseFabPdf(buf){
 window.__parseFabPdf=parseFabPdf;
 $("#btnCam").onclick=()=>$("#camIn").click();
 $("#camIn").onchange=e=>{ const fl=[...e.target.files]; e.target.value=""; if(fl.length) FAB.photo(fl); };
+$("#btnImgIn").onclick=()=>$("#galIn").click();
+$("#galIn").onchange=e=>{ const fl=[...e.target.files]; e.target.value=""; if(fl.length) FAB.photo(fl); };
 $("#btnPdfIn").onclick=()=>$("#pdfIn").click();
 $("#pdfIn").onchange=async e=>{ const fl=[...e.target.files]; e.target.value=""; let add=0,dup=0; for(const fi of fl){ try{ const arr=parseFabPdf(await fi.arrayBuffer()); const r=FAB.add(arr); add+=r.add; dup+=r.dup; }catch(err){ toast(fi.name+": "+err.message); } } if(add||dup) toast(`تمت الإضافة: ${add} مخزون${dup?` · ${dup} مكرر تجاوزتو`:""}`); home(); };
 
