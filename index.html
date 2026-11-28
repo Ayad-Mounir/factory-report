@@ -1943,18 +1943,18 @@ function ocFab(c,sheets){
 }
 function ocData(R){
   const {cards,sheets}=ocCards(), rows=profitRows(R).filter(x=>!x.tail), by=new Map(), out=[];
-  rows.forEach(x=>{ const m=x.m, nn=v=>String(v==null?"":v).trim().toLowerCase(), c=cards.find(z=>(m.uid&&z.mid===m.uid)||(m.cid&&z.id===m.cid))||cards.find(z=>!z.mid&&nn(z.name)&&nn(z.name)===nn(x.r.m)); if(!c){ out.push({name:x.r.m,card:null,ms:[x]}); return; } if(!by.has(c.id)){ const o={name:c.name||x.r.m,card:c,ms:[]}; by.set(c.id,o); out.push(o); } by.get(c.id).ms.push(x); });
-  return out.map(o=>{ const F=o.card?ocFab(o.card,sheets):{lines:[],tot:0,miss:0}, q=Math.max(num(o.card&&o.card.qty)||0,...o.ms.map(x=>x.r.q||0)), gp=o.ms.reduce((a,x)=>a+x.gp,0), wh=o.ms.reduce((a,x)=>a+x.wh,0), wm=o.ms.reduce((a,x)=>a+x.wm,0), fx=o.ms.reduce((a,x)=>a+x.fx,0), tot=F.tot+gp+wh+wm+fx, sx=o.ms.find(x=>x.r.sp!==null), sp=sx?sx.r.sp:null;
-    return {...o,F,q,gp,wh,wm,fx,tot,pc:q?tot/q:0,sp,pf:(sp!==null&&q)?sp-tot/q:null,linked:!!o.card}; });
+  rows.forEach(x=>{ const m=x.m, nn=v=>String(v==null?"":v).trim().toLowerCase(), c=cards.find(z=>(m.uid&&z.mid===m.uid)||(m.cid&&z.id===m.cid))||cards.find(z=>nn(z.name)&&nn(z.name)===nn(x.r.m))||cards.find(z=>nn(z.name)&&nn(x.r.m)&&(nn(z.name).includes(nn(x.r.m))||nn(x.r.m).includes(nn(z.name)))); if(!c){ out.push({name:x.r.m,card:null,ms:[x],dbg:"uid="+(m.uid||"-")+" · cid="+(m.cid||"-")+" · بطاقات: "+(cards.length?cards.slice(0,6).map(z=>(z.name||"?")+"["+(z.mid||"-")+"]").join("، "):"لا توجد بطاقات في هذا المتصفح")}); return; } if(!by.has(c.id)){ const o={name:c.name||x.r.m,card:c,ms:[]}; by.set(c.id,o); out.push(o); } by.get(c.id).ms.push(x); });
+  return out.map(o=>{ const F=o.card?ocFab(o.card,sheets):{lines:[],tot:0,miss:0}, q=Math.max(num(o.card&&o.card.qty)||0,...o.ms.map(x=>x.r.q||0)), gp=o.ms.reduce((a,x)=>a+x.gp,0), wh=o.ms.reduce((a,x)=>a+x.wh,0), wm=o.ms.reduce((a,x)=>a+x.wm,0), fx=o.ms.reduce((a,x)=>a+x.fx,0), tot=F.tot+wh+wm+fx, sl=o.ms.filter(x=>x.sale!==null), sale=sl.length?sl.reduce((a,x)=>a+x.sale,0):null;
+    return {...o,F,q,gp,wh,wm,fx,tot,sale,pc:q?tot/q:0,sp:sale!==null&&q?sale/q:null,pf:(sale!==null&&q)?(sale-tot)/q:null,linked:!!o.card}; });
 }
 function ocTable(o){
   const f=n=>fa(n), row=(l,d,v,b)=>`<tr${b?' class="tot"':""}><td class="l">${l}</td><td>${d||""}</td><td>${v}</td></tr>`;
   let h=`<table><tr><th>البند</th><th>التفصيل</th><th>المبلغ (د)</th></tr>`;
-  if(!o.linked) h+=row("القماش","غير مربوط ببطاقة تقطيع — افتح الطلبية واختر «من طلبيات التقطيع»","—"); else if(!o.F.lines.length) h+=row("القماش","لا رولوات محدَّدة","—");
+  if(!o.linked) h+=row("القماش","غير مربوط ببطاقة تقطيع"+(o.ms[0]&&o.dbg?" ["+esc(o.dbg)+"]":""),"—"); else if(!o.F.lines.length) h+=row("القماش","لا رولوات محدَّدة","—");
   o.F.lines.forEach(l=>{ h+=row("القماش: "+esc(l.n),fa(l.ro)+" رولو · "+fa(l.q,2)+" "+l.u+" × "+(l.pr?fa(l.pr,2):"؟ بلا سعر"),l.pr?f(l.amt):"—"); });
-  o.ms.forEach(x=>{ h+=row("ثمن المجموعة G"+x.r.g+(o.ms.length>1?" ("+esc(x.r.m)+")":""),f(x.r.q)+" × "+fa(x.r.p,2),f(x.gp)); });
   h+=row("عمال الساعات","",f(o.wh))+row("عمال الشهر","",f(o.wm))+row("المصاريف الثابتة","",f(o.fx))+row("مجموع تكلفة الطلبية","",f(o.tot),1)+row("عدد القطع","",f(o.q))+row("التكلفة الفعلية للقطعة","",fa(o.pc,2),1);
-  if(o.sp!==null) h+=row("ثمن بيع القطعة","",fa(o.sp,2))+row("الربح للقطعة","",fa(o.pf,2));
+  o.ms.forEach(x=>{ h+=row("ثمن البيع G"+x.r.g+(o.ms.length>1?" ("+esc(x.r.m)+")":""),f(x.r.q)+" × "+(x.r.sp===null?"؟ بلا ثمن":fa(x.r.sp,2)),x.sale===null?"—":f(x.sale)); });
+  if(o.sale!==null) h+=row("مجموع البيع","",f(o.sale))+row("الربح","",f(o.sale-o.tot),1)+row("الربح للقطعة","",fa(o.pf,2));
   return h+"</table>";
 }
 const ocT=o=>esc(o.name)+" · "+o.ms.map(x=>"G"+x.r.g).filter((v,i,a)=>a.indexOf(v)===i).join(" + ");
